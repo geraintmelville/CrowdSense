@@ -1,0 +1,65 @@
+capstone/
+├── .gitignore
+├── .streamlit/
+│   └── secrets.toml
+├── .vscode/
+│   └── settings.json
+├── app.py
+├── backend/
+│   ├── .env
+│   ├── __init__.py
+│   ├── cloud_config.py
+│   ├── upload_helper.py
+│   └── lambda/
+│       └── extract_audio_lambda.py
+├── constants/
+│   ├── __init__.py
+│   └── constants.py
+├── data/
+│   ├── metadata/
+│   │   ├── clips.csv
+│   │   ├── clips_data.db
+│   │   └── matches.csv
+│   ├── modelling/
+│   │   ├── final_model/
+│   │   │   └── model_bundle.joblib
+│   │   ├── parameters/
+│   │   │   └── model_search_results.csv
+│   │   ├── performance/
+│   │   └── predictions/
+│   │       └── yamnet_audio_test_probabilities.csv
+│   ├── processed/
+│   │   ├── features/
+│   │   │   ├── 096_048/
+│   │   │   │   └── _meta.csv
+│   │   │   └── pca/
+│   │   │       └── pca_transform.npz
+│   │   └── labels/
+│   │       └── labels.csv
+│   └── raw/
+│       ├── audio/
+│       │   └── *.wav
+│       ├── clips/
+│       │   └── *.zip
+│       └── video/
+│           └── *.mp4
+├── modelling/
+│   ├── eval_model.py
+│   ├── functions.py
+│   ├── save_final_model.py
+│   ├── train_predict.py
+│   └── tune_model.py
+├── preprocessing/
+│   ├── build_clip_database.py
+│   ├── extract_audio.py
+│   ├── extract_features.py
+│   ├── extract_labels.py
+│   └── functions.py
+├── requirements.txt
+├── tree_diagram.txt
+└── views/
+    ├── architecture.py
+    ├── dashboard.py
+    ├── dataset_info.py
+    ├── model_pipeline.py
+    └── overview.py

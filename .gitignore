@@ -1,0 +1,30 @@
+# Local secrets and environment configuration
+backend/.env
+.env
+.streamlit/secrets.toml
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data artefacts -- raw footage, extracted audio, highlight zips,
+# derived features/PCA, and the trained model bundle are all
+# regenerable from the pipeline scripts and too large/binary for git.
+data/raw/
+data/processed/
+data/modelling/predictions/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

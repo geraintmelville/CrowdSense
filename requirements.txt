@@ -1,0 +1,13 @@
+streamlit
+boto3
+joblib
+matplotlib
+numpy
+pandas
+scikit-learn
+scipy
+soundfile
+tensorflow-cpu
+tensorflow-hub
+xgboost
+imageio-ffmpeg
