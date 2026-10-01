@@ -6,6 +6,40 @@ from pathlib import Path
 import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
 
+_PLACEHOLDER_AWS_VALUES = {
+    "AWS_ACCESS_KEY_ID": {"your-access-key-id", "replace-me", "changeme"},
+    "AWS_SECRET_ACCESS_KEY": {"your-secret-access-key", "replace-me", "changeme"},
+}
+
+
+def _is_placeholder_aws_value(key: str, value: str | None) -> bool:
+    if value is None:
+        return True
+    value = str(value).strip().strip("\"'")
+    if not value:
+        return True
+    return value.lower() in _PLACEHOLDER_AWS_VALUES.get(key, set())
+
+
+def _has_real_aws_credentials() -> bool:
+    access_key = os.environ.get("AWS_ACCESS_KEY_ID", "")
+    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+    return bool(access_key) and bool(secret_key) and not (
+        _is_placeholder_aws_value("AWS_ACCESS_KEY_ID", access_key)
+        or _is_placeholder_aws_value("AWS_SECRET_ACCESS_KEY", secret_key)
+    )
+
+
+def _store_env(key: str, value: str | None) -> None:
+    if value is None:
+        return
+    value = str(value).strip().strip("\"'")
+    if not value or _is_placeholder_aws_value(key, value):
+        return
+    current = os.environ.get(key)
+    if current is None or _is_placeholder_aws_value(key, current):
+        os.environ[key] = value
+
 
 def _load_local_env() -> None:
     env_path = Path(__file__).with_name(".env")
@@ -16,7 +50,7 @@ def _load_local_env() -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+        _store_env(key.strip(), value.strip())
 
 
 def _load_streamlit_secrets() -> None:
@@ -33,8 +67,7 @@ def _load_streamlit_secrets() -> None:
         "CROWDSENSE_UPLOAD_BUCKET",
     ):
         value = secrets.get(key)
-        if value:
-            os.environ.setdefault(key, str(value))
+        _store_env(key, value)
 
 
 _load_local_env()

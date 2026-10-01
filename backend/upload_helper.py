@@ -5,15 +5,26 @@ used from a small static/JS upload widget embedded via st.components, or
 from a separate lightweight upload page -- not Streamlit's file_uploader.
 """
 
+import os
 import re
 import uuid
 from datetime import datetime
 
 import boto3
 
-from backend.cloud_config import AWS_REGION, RAW_PREFIX, UPLOAD_BUCKET
+from backend.cloud_config import (
+    AWS_REGION,
+    AWS_ENDPOINT_URL,
+    RAW_PREFIX,
+    UPLOAD_BUCKET,
+    _has_real_aws_credentials,
+)
 
-_s3 = boto3.client("s3", region_name=AWS_REGION)
+_s3 = boto3.client(
+    "s3",
+    region_name=AWS_REGION,
+    endpoint_url=AWS_ENDPOINT_URL or f"https://s3.{AWS_REGION}.amazonaws.com",
+)
 
 _SAFE_NAME = re.compile(r"[^a-zA-Z0-9_.-]+")
 
@@ -34,10 +45,11 @@ def presigned_upload(original_filename: str, max_bytes: int = 3 * 1024 * 1024 * 
     """
     if not UPLOAD_BUCKET:
         raise RuntimeError("CROWDSENSE_UPLOAD_BUCKET is not configured")
-    if boto3.Session().get_credentials() is None:
+    if not _has_real_aws_credentials() or boto3.Session().get_credentials() is None:
         raise RuntimeError(
-            "AWS credentials are not configured. Set AWS_ACCESS_KEY_ID and "
-            "AWS_SECRET_ACCESS_KEY, or configure an AWS profile."
+            "AWS credentials are not configured or are still using placeholder values. "
+            "Set real AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or configure an "
+            "AWS profile."
         )
     key = make_match_key(original_filename)
     presigned = _s3.generate_presigned_post(

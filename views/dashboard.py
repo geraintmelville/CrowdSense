@@ -102,6 +102,8 @@ def score_match(audio_path: Path, bundle: dict, yamnet_model=None) -> tuple[pd.D
 
 def _render_upload_widget(presigned: dict) -> None:
     fields_json = json.dumps(presigned["fields"])
+    upload_url = json.dumps(presigned["url"])
+
     components.html(
         f"""
         <div>
@@ -109,32 +111,61 @@ def _render_upload_widget(presigned: dict) -> None:
           <button id="crowdsense-upload-btn">Upload to cloud</button>
           <div id="crowdsense-status"></div>
         </div>
+
         <script>
           const fields = {fields_json};
-          const uploadUrl = "{presigned['url']}";
+          const uploadUrl = {upload_url};
+
           document.getElementById("crowdsense-upload-btn").onclick = async () => {{
             const fileInput = document.getElementById("crowdsense-file");
             const status = document.getElementById("crowdsense-status");
+
             if (!fileInput.files.length) {{
               status.innerText = "Choose a file first.";
               return;
             }}
+
+            const file = fileInput.files[0];
             const formData = new FormData();
-            Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
-            formData.append("file", fileInput.files[0]);
-            status.innerText = "Uploading... this can take a while for a full match.";
+
+            Object.entries(fields).forEach(([k, v]) => {{
+              formData.append(k, v);
+            }});
+
+            formData.append("file", file);
+
+            status.innerText =
+              `Uploading ${{file.name}} (${{(file.size / 1024 / 1024).toFixed(1)}} MB)...`;
+
             try {{
-              const response = await fetch(uploadUrl, {{ method: "POST", body: formData }});
-              status.innerText = response.ok
-                ? "Uploaded. Click 'Check for extracted audio' below -- extraction runs automatically."
-                : `Upload failed (status ${{response.status}}).`;
+              const response = await fetch(uploadUrl, {{
+                method: "POST",
+                body: formData
+              }});
+
+              const responseText = await response.text();
+
+              console.log("S3 status:", response.status);
+              console.log("S3 response:", responseText);
+
+              if (response.ok) {{
+                status.innerText =
+                  "Uploaded. Click 'Check for extracted audio' below.";
+              }} else {{
+                status.innerText =
+                  `S3 upload failed: HTTP ${{response.status}}\\n${{responseText.substring(0, 500)}}`;
+              }}
+
             }} catch (error) {{
-              status.innerText = "Upload failed. Check the bucket CORS configuration.";
+              console.error("S3 upload error:", error);
+
+              status.innerText =
+                `Browser upload error: ${{error.name}}: ${{error.message}}`;
             }}
           }};
         </script>
         """,
-        height=150,
+        height=180,
     )
 
 
