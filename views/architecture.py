@@ -9,9 +9,8 @@ st.caption("How upload, storage, extraction, and inference fit together.")
 st.header("Architecture Overview")
 st.markdown(
     """
-    CrowdSense supports two ways to get footage in: uploading already-extracted audio
-    directly to this app, or uploading full raw match video to the cloud for automatic
-    audio extraction. Both paths converge on the same YAMNet + XGBoost scoring step.
+    CrowdSense accepts full raw match video through a direct-to-cloud upload. The cloud
+    extracts its audio track automatically, then the app scores it with YAMNet + XGBoost.
     """
 )
 
@@ -27,9 +26,8 @@ st.markdown(
     3. **Lambda → S3.** The extracted audio is written to `audio/<key>.wav`, and the raw
        video is deleted from the extraction step's working area (the original raw video
        itself is retained in S3 for in-app playback until lifecycle rules clean it up).
-    4. **App polls, then downloads.** The dashboard polls for the extracted audio object,
-       downloads just that (small) file, and runs it through the same scoring path as a
-       directly-uploaded WAV.
+     4. **App polls, then downloads.** The dashboard polls for the extracted audio object,
+       downloads just that (small) file, and scores it with the trained model.
     5. **Playback.** A presigned GET URL lets the dashboard stream the original raw video
        and seek straight to a candidate clip's timestamp for review.
 
@@ -41,8 +39,8 @@ st.markdown(
 st.header("Component Responsibilities")
 st.markdown(
     """
-    - **Streamlit app (`dashboard.py`)** — local-audio and cloud-video tabs, triggers
-      scoring, renders candidate clips and video playback.
+    - **Streamlit app (`dashboard.py`)** — uploads cloud video, triggers scoring, and
+      renders candidate clips and video playback.
     - **`backend/upload_helper.py`** — builds presigned S3 POST requests for direct
       browser-to-cloud upload.
     - **`backend/lambda/extract_audio_lambda.py`** — S3-triggered ffmpeg audio extraction;
@@ -51,7 +49,7 @@ st.markdown(
     - **`backend/cloud_config.py`** — bucket name, region, and prefix configuration, read
       from environment variables.
     - **Inference (`preprocessing/extract_features.py` + `data/modelling/final_model/model_bundle.joblib`)** —
-      YAMNet feature extraction and XGBoost scoring, shared by both upload paths.
+      YAMNet feature extraction and XGBoost scoring for uploaded footage.
     """
 )
 

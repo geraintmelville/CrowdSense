@@ -23,11 +23,11 @@ Usage:
 
 import argparse
 from functools import lru_cache
+import os
 import time
 from pathlib import Path
 import tempfile
 
-import tensorflow_hub as hub
 import numpy as np
 import pandas as pd
 import soundfile as sf
@@ -56,6 +56,12 @@ STRIDE_SEC = YAMNET_STRIDE_SEC
 @lru_cache(maxsize=1)
 def load_yamnet_model():
     """Load YAMNet once for callers that do not provide a model."""
+    cache_dir = Path(os.environ.setdefault(
+        "TFHUB_CACHE_DIR", str(Path.home() / ".cache" / "tensorflow_hub")
+    ))
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    import tensorflow_hub as hub
+
     return hub.load("https://tfhub.dev/google/yamnet/1")
 
 

@@ -1,4 +1,4 @@
-"""Streamlit entry point for local audio scoring and cloud video uploads."""
+"""Streamlit entry point for cloud video uploads and highlight scoring."""
 
 import argparse
 import json
@@ -11,33 +11,10 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-import tensorflow_hub as hub
 
 from constants import MODEL_BUNDLE_PATH
 from modelling.functions import merge_intervals
-from preprocessing.extract_features import extract_yamnet_features_streaming
 from backend.cloud_config import get_upload_config
-
-
-def aggregate_window_features(
-    scores,
-    embeddings,
-    start_sec,
-    window_sec,
-    stride_sec,
-    score_indices,
-    embedding_transform=None,
-):
-    frame_index = int(np.clip(np.rint(start_sec / stride_sec), 0, len(scores) - 1))
-    selected_scores = scores[frame_index][list(score_indices)]
-    if embedding_transform is None:
-        return selected_scores.astype(np.float32)
-    if embeddings is None:
-        raise ValueError("Embeddings are required when embedding_transform is set")
-    pca_components, pca_mean = embedding_transform
-    selected_embeddings = embeddings[frame_index]
-    selected_pca = (selected_embeddings - pca_mean) @ pca_components.T
-    return np.concatenate([selected_scores, selected_pca]).astype(np.float32)
 
 
 @st.cache_resource
@@ -47,7 +24,9 @@ def load_bundle(bundle_path: str) -> dict:
 
 @st.cache_resource
 def load_yamnet_model():
-    return hub.load("https://tfhub.dev/google/yamnet/1")
+    from preprocessing.extract_features import load_yamnet_model as load_model
+
+    return load_model()
 
 
 def format_timestamp(seconds: float) -> str:
@@ -58,6 +37,8 @@ def format_timestamp(seconds: float) -> str:
 
 
 def score_match(audio_path: Path, bundle: dict, yamnet_model=None) -> tuple[pd.DataFrame, float, int]:
+    from preprocessing.extract_features import extract_yamnet_features_streaming
+
     feature_columns = bundle.get("feature_columns", [])
     uses_pca = any(column.startswith("yamnet_embedding_pca_") for column in feature_columns)
     if uses_pca and not {"pca_components", "pca_mean"}.issubset(bundle):
@@ -71,20 +52,18 @@ def score_match(audio_path: Path, bundle: dict, yamnet_model=None) -> tuple[pd.D
     stride_sec = bundle["stride_sec"]
     starts = np.arange(0, max(0, duration - window_sec) + 1e-6, stride_sec)
 
-    feature_rows = [
-        aggregate_window_features(
-            scores,
-            embeddings,
-            float(start),
-            window_sec,
-            stride_sec,
-            bundle["yamnet_score_indices"],
-            (np.asarray(bundle["pca_components"]), np.asarray(bundle["pca_mean"]))
-            if uses_pca else None,
-        )
-        for start in starts
-    ]
-    feature_matrix = np.vstack(feature_rows)
+    frame_indices = np.clip(
+        np.rint(starts / stride_sec).astype(np.intp), 0, len(scores) - 1
+    )
+    score_features = scores[frame_indices][:, list(bundle["yamnet_score_indices"])]
+    feature_matrix = score_features.astype(np.float32)
+    if uses_pca:
+        if embeddings is None:
+            raise ValueError("Embeddings are required when the model uses PCA features")
+        pca_components = np.asarray(bundle["pca_components"])
+        pca_mean = np.asarray(bundle["pca_mean"])
+        pca_features = (embeddings[frame_indices] - pca_mean) @ pca_components.T
+        feature_matrix = np.concatenate((feature_matrix, pca_features), axis=1).astype(np.float32)
     probabilities = bundle["model"].predict_proba(feature_matrix)[:, 1]
 
     selected_starts = starts[probabilities >= bundle["threshold"]]
@@ -209,6 +188,8 @@ def render_cloud_upload_tab(bundle: dict) -> None:
         except RuntimeError as error:
             st.error(str(error))
             return
+        for state_key in ("clips", "video_url", "duration", "n_windows"):
+            st.session_state.pop(state_key, None)
         st.session_state["presigned_filename"] = uploaded_name
 
     presigned = st.session_state["presigned"]
@@ -225,48 +206,52 @@ def render_cloud_upload_tab(bundle: dict) -> None:
             s3.download_file(bucket, audio_key, str(audio_path))
             with st.spinner("Running YAMNet + classifier..."):
                 clips, duration, n_windows = score_match(audio_path, bundle)
-        
-        # Clean up the temporary audio file object, leaving the raw video intact for streaming
-        s3.delete_object(Bucket=bucket, Key=audio_key)
-
-        st.success(f"Scored {n_windows} windows across {format_timestamp(duration)} of footage.")
-        if clips.empty:
-            st.warning("No candidate windows cleared the threshold.")
-            return
-            
-        st.dataframe(
-            clips[["start", "end", "length_sec"]].rename(
-                columns={"start": "Start", "end": "End", "length_sec": "Length (s)"}
-            ),
-            use_container_width=True,
-        )
-
-        st.markdown("---")
-        st.subheader("📺 Watch Highlight Clips")
-
-        # Generate a secure presigned URL for the raw video (valid for 1 hour)
-        raw_video_key = presigned["key"]
         video_url = s3.generate_presigned_url(
             "get_object",
-            Params={"Bucket": bucket, "Key": raw_video_key},
+            Params={"Bucket": bucket, "Key": presigned["key"]},
             ExpiresIn=3600,
         )
+        st.session_state["clips"] = clips
+        st.session_state["video_url"] = video_url
+        st.session_state["duration"] = duration
+        st.session_state["n_windows"] = n_windows
 
-        # Let the user pick a clip to play
-        selected_clip_index = st.selectbox(
-            "Select a clip to review:",
-            options=clips.index,
-            format_func=lambda i: f"Clip {i+1}: {clips.loc[i, 'start']} to {clips.loc[i, 'end']} ({clips.loc[i, 'length_sec']:.1f}s)",
-        )
+    if "clips" not in st.session_state:
+        return
 
-        if selected_clip_index is not None:
-            clip = clips.loc[selected_clip_index]
-            start_seconds = float(clip["start_sec"])
-            
-            st.write(f"Playing highlight from **{clip['start']}**")
-            
-            # Streamlit video component seeking straight to the timestamp
-            st.video(video_url, start_time=start_seconds)
+    clips = st.session_state["clips"]
+    video_url = st.session_state["video_url"]
+    duration = st.session_state["duration"]
+    n_windows = st.session_state["n_windows"]
+
+    st.success(f"Scored {n_windows} windows across {format_timestamp(duration)} of footage.")
+    if clips.empty:
+        st.warning("No candidate windows cleared the threshold.")
+        return
+
+    st.dataframe(
+        clips[["start", "end", "length_sec"]].rename(
+            columns={"start": "Start", "end": "End", "length_sec": "Length (s)"}
+        ),
+        use_container_width=True,
+    )
+
+    st.markdown("---")
+    st.subheader("📺 Watch Highlight Clips")
+
+    selected_clip_index = st.selectbox(
+        "Select a clip to review:",
+        options=clips.index,
+        format_func=lambda i: f"Clip {i+1}: {clips.loc[i, 'start']} to {clips.loc[i, 'end']} ({clips.loc[i, 'length_sec']:.1f}s)",
+    )
+
+    if selected_clip_index is not None:
+        clip = clips.loc[selected_clip_index]
+        start_seconds = float(clip["start_sec"])
+
+        st.write(f"Playing highlight from **{clip['start']}**")
+
+        st.video(video_url, start_time=start_seconds)
 
 
 def parse_args() -> argparse.Namespace:
@@ -284,34 +269,7 @@ def render_dashboard() -> None:
         return
     bundle = load_bundle(str(args.bundle))
 
-    local_tab, cloud_tab = st.tabs(["Local audio", "Cloud video"])
-    with local_tab:
-        uploaded_audio = st.file_uploader("Upload pre-extracted match audio (.wav)", type=["wav"])
-        if uploaded_audio is not None:
-            with tempfile.TemporaryDirectory() as tmp_dir_name:
-                audio_path = Path(tmp_dir_name) / "audio.wav"
-                audio_path.write_bytes(uploaded_audio.getbuffer())
-                with st.spinner("Running YAMNet + classifier..."):
-                    clips, duration, n_windows = score_match(audio_path, bundle)
-            st.success(f"Scored {n_windows} windows across {format_timestamp(duration)} of footage.")
-            st.metric("Candidate clips", len(clips))
-            if clips.empty:
-                st.warning("No candidate windows cleared the threshold.")
-            else:
-                st.dataframe(
-                    clips[["start", "end", "length_sec"]].rename(
-                        columns={"start": "Start", "end": "End", "length_sec": "Length (s)"}
-                    ),
-                    use_container_width=True,
-                )
-                st.download_button(
-                    "Download candidates as CSV",
-                    clips[["start_sec", "end_sec", "length_sec"]].to_csv(index=False),
-                    file_name=f"{Path(uploaded_audio.name).stem}_candidates.csv",
-                    mime="text/csv",
-                )
-    with cloud_tab:
-        render_cloud_upload_tab(bundle)
+    render_cloud_upload_tab(bundle)
 
 
 render_dashboard()
