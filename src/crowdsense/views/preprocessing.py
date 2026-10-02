@@ -37,9 +37,15 @@ with section(P, "features", "3 · YAMNet features"):
         """
         Audio is resampled to 16 kHz and fed to YAMNet in bounded chunks at its **native
         cadence**: a 0.96s window every 0.48s, so each row is one untouched YAMNet frame.
-        Each frame keeps 11 AudioSet class scores (Shout, Yell, Screaming, Whistling, Cheering,
+        YAMNet is a pretrained general-audio model, not a goal detector: it outputs scores for
+        521 AudioSet classes and a 1,024-value embedding. CrowdSense keeps 11 relevant class
+        scores (Shout, Yell, Screaming, Whistling, Cheering,
         Applause, Crowd, Chatter, Hubbub, Clapping, Children shouting) plus the embedding.
         Output is one Parquet file per match and a `_meta.csv` recording the run configuration.
+
+        [TensorFlow's YAMNet guide](https://www.tensorflow.org/tutorials/audio/transfer_learning_audio)
+        documents the 16 kHz input, 0.96s frames, 0.48s hop and 1,024-value embeddings.
+        Class scores are audio-event scores, not probabilities that a goal occurred.
         """
     )
 
@@ -67,5 +73,7 @@ with section(P, "labels", "5 · Label refinement"):
         Whistling is deliberately excluded; it stays available as a separate feature. The
         labels CSV keeps both the refined window (used for training targets) and the original
         clip bounds (used to score recall), plus the peak time and score for auditing.
+        The heuristic assumes the strongest Cheering/Crowd/Applause peak is near the goal; it
+        can miss quiet goals or select an unrelated loud reaction within the search span.
         """
     )

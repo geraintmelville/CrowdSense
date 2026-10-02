@@ -1,8 +1,8 @@
 """Performance: metrics, results, limitations, next steps. Single home for headline numbers."""
 
 import streamlit as st
+from constants import RECALL_BUDGET_PLOT_PATH, RESULTS
 
-from constants import RESULTS
 from src.crowdsense.nav import page_header, section
 
 P = "performance"
@@ -11,13 +11,29 @@ page_header(P, "Performance", "How the model is measured and how well it does on
 with section(P, "metrics", "1 · Recall vs budget"):
     st.markdown(
         """
-        - **Recall** — share of true goal clips *fully contained* in a merged candidate window
-          (scored against the original editor clip bounds).
+        - **Recall** — share of editor-labelled "Goal" clips *fully contained* in a merged
+          candidate window (scored against original editor clip bounds). This measures clip
+          coverage, not whether a detected event is a goal or classification accuracy.
         - **Budget** — total merged candidate seconds ÷ total raw match seconds.
         - **Curve AUC** — area under recall vs budget, swept over thresholds. Used to rank
           tuning candidates; `eval_model.py` also reports recall at fixed budget checkpoints.
         """
     )
+    st.caption(
+        "The evaluation pools goal clips and footage seconds across eight held-out matches. "
+        "The displayed values are rounded summary metrics; performance can vary by match."
+    )
+    if RECALL_BUDGET_PLOT_PATH.is_file():
+        st.image(
+            str(RECALL_BUDGET_PLOT_PATH),
+            caption="Held-out test-set recall as the candidate footage budget increases.",
+            use_container_width=True,
+        )
+    else:
+        st.info(
+            "Recall-budget curve not found. Run `python -m modelling.eval_model` "
+            f"to generate `{RECALL_BUDGET_PLOT_PATH.relative_to(RECALL_BUDGET_PLOT_PATH.parents[2])}`."
+        )
 
 with section(P, "results", "2 · Results"):
     cols = st.columns(3)
@@ -32,8 +48,11 @@ with section(P, "results", "2 · Results"):
 
 with section(P, "limits", "3 · Limitations"):
     st.info(
-        "~31 matches limit model complexity. Label quality depends on the peak-finding "
-        "heuristic. Only 'Goal' clips are used as positives."
+        "The dataset is small (~31 matches), and test results come from one fixed split of eight "
+        "recent matches. Label quality depends on the peak-finding heuristic; editor clips are "
+        "the reference labels, and only 'Goal' clips are positives. The pooled result can hide "
+        "match-to-match variation; performance on other clubs, venues or recording conditions "
+        "has not been established."
     )
 
 with section(P, "next", "4 · Planned improvements"):

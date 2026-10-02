@@ -14,6 +14,8 @@ with section(P, "segment", "1 · Choose match audio"):
         from `demo/features/`; Full demo selects the corresponding WAV from `demo/raw/audio/`
         and extracts the features during analysis. Prepare the WAV from a source MP4 in
         `demo/raw/video/` with `python -m demo.prepare_demo`.
+        Quick mode estimates duration from the final cached frame start plus the model window;
+        this can differ slightly from the source audio duration.
         """
     )
 
@@ -30,7 +32,7 @@ with section(P, "scoring", "2 · Scoring"):
 with section(P, "merging", "3 · Candidate merging"):
     st.markdown(
         """
-        Windows with probability above the saved threshold are padded (lookback before,
+        Windows whose model score meets or exceeds the saved threshold are padded (lookback before,
         postroll after) and merged when within `merge_gap` of each other, giving a short list
         of candidate clips instead of a probability per 0.48s.
         """
@@ -41,7 +43,8 @@ with section(P, "review", "4 · Dashboard review"):
         """
         The dashboard lists merged start/end timestamps. Set `CROWDSENSE_DEMO_YOUTUBE_URL` to the
         selected match's URL to enable timestamp links and in-page playback. Timestamps are
-        relative to the start of the selected match audio.
+        relative to the start of the selected match audio, so the YouTube video must start at
+        the same point as the audio for timestamps to align.
 
         This is a low-traffic prototype, not a production service.
         """

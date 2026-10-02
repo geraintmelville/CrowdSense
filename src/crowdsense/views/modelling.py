@@ -52,7 +52,9 @@ with section(P, "final", "5 · Final model & deployment threshold 🔒 training 
         """
         `save_final_model.py` builds pooled grouped OOF predictions across the training matches
         and picks the operating point whose budget is closest to the configured limit (30% by
-        default), tie-breaking on recall. The model is then refit on the full feature set and
+        default), tie-breaking on recall. This closest-point target can land slightly above or
+        below 30%; test matches are excluded from threshold selection. The model is then refit
+        on all non-test training matches and
         saved as `model.ubj` plus `model.json` (threshold, feature columns, YAMNet score
         indices, window/stride, PCA components + mean, and the candidate-window settings).
         """
