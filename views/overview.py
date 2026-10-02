@@ -47,7 +47,7 @@ st.markdown(
        so a reviewer gets a handful of short clips per match instead of a probability per 0.48s.
 
     See the **Model & YAMNet Pipeline** page for the full stage-by-stage detail, and
-    **System Architecture** for how this fits together with the cloud upload flow.
+    **System Architecture** for how the local demo segment is created and scored.
     """
 )
 
@@ -55,9 +55,9 @@ st.header("Project Areas")
 st.markdown(
     """
     - **Dataset & Ingestion** — how raw footage, highlight clips, and labels become training data.
-    - **System Architecture** — Streamlit app, S3 upload, Lambda audio extraction, inference.
+    - **System Architecture** — local video segment creation, audio extraction, and inference.
     - **Model & YAMNet Pipeline** — feature extraction, PCA, XGBoost, threshold selection.
-    - **Dashboard** (this app's main entry point) — upload footage or audio and review candidates.
+    - **Dashboard** (this app's main entry point) — choose a full-match time range and review candidates.
     """
 )
 
@@ -65,7 +65,6 @@ st.header("What's Next")
 st.markdown(
     """
     - Temporal pattern features (crowd spike → quiet gap → restart whistle) to push recall further.
-    - Consolidating the two PCA-fitting code paths into one.
     - Per-match recall breakdown in evaluation, not just the pooled curve.
     """
 )

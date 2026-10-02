@@ -1,8 +1,8 @@
 """Train and persist a single final model + decision threshold for the dashboard.
 
 Run this ONCE after tune_model.py has produced tuned hyperparameters. It
-produces data/modelling/final_model/model_bundle.joblib containing everything dashboard.py needs to
-score new footage without retraining on every upload.
+produces data/modelling/final_model/model.ubj and model.json, containing everything
+dashboard.py needs to score new footage without retraining on every upload.
 
 Usage:
     python -m modelling.save_final_model
@@ -24,19 +24,20 @@ requested budget when no exact operating point exists.
 import argparse
 from pathlib import Path
 
-import joblib
 import numpy as np
 
 from constants import (
     DEPLOYMENT_BUDGET, FEATURES_DIR, LABELS_PATH, MATCHES_PATH,
-    MODEL_BUNDLE_PATH, MODEL_RESULTS_PATH, PCA_DIR, RANDOM_STATE,
+    MODEL_PATH, MODEL_RESULTS_PATH, PCA_DIR, RANDOM_STATE,
 )
 
 from modelling.functions import (
     STRIDE_SEC, WINDOW_SEC, YAMNET_SCORE_INDICES, build_model,
     build_targets, load_best_candidate_config, load_best_params, load_features,
-    load_labels, load_raw_durations, recall_budget_curve, required_feature_columns,
+    load_labels, load_raw_durations, pooled_oof_predict, recall_budget_curve,
+    required_feature_columns,
 )
+from modelling.model_artifact import save_model_artifact
 
 
 def select_threshold(
@@ -95,7 +96,7 @@ def main() -> None:
     parser.add_argument("--merge-gap", type=float, default=None,
                         help="Override the tuned merge gap (seconds); default: tuned value.")
     parser.add_argument("--random-state", type=int, default=RANDOM_STATE)
-    parser.add_argument("--output", type=Path, default=MODEL_BUNDLE_PATH)
+    parser.add_argument("--output", type=Path, default=MODEL_PATH)
     args = parser.parse_args()
 
     df = load_features(args.features)
@@ -139,30 +140,34 @@ def main() -> None:
 
     random_state = model_params.pop("random_state", args.random_state)
     model = build_model(model_params, random_state)
-    model.fit(feature_matrix[train_idx], targets[train_idx])
-
+    probabilities, _ = pooled_oof_predict(
+        feature_matrix, targets, groups, model_params, random_state, n_folds=4,
+    )
     threshold, recall, budget = select_threshold(
-        groups[train_idx], starts[train_idx], model.predict_proba(feature_matrix[train_idx])[:, 1],
+        groups, starts, probabilities,
         clip_labels, raw_durations, merge_gap, lookback, postroll, args.budget,
     )
     print(f"Decision threshold: {threshold:.4f} (recall={recall:.1%}, budget={budget:.1%}; "
           f"requested max={args.budget:.1%} on training data)")
 
-    bundle = {
-        "model": model,
+    model.fit(feature_matrix[train_idx], targets[train_idx])
+
+    metadata = {
         "threshold": threshold,
         "feature_columns": selected_features,
-        "yamnet_score_indices": YAMNET_SCORE_INDICES,
+        "yamnet_score_indices": list(YAMNET_SCORE_INDICES),
         "window_sec": WINDOW_SEC,
         "stride_sec": STRIDE_SEC,
         "lookback": lookback,
         "postroll": postroll,
         "merge_gap": merge_gap,
-        **pca_bundle,
     }
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(bundle, args.output)
-    print(f"Saved model bundle -> {args.output}")
+    if pca_bundle:
+        metadata["pca_components"] = pca_bundle["pca_components"].tolist()
+        metadata["pca_mean"] = pca_bundle["pca_mean"].tolist()
+    save_model_artifact(model, metadata, args.output)
+    print(f"Saved model -> {args.output}")
+    print(f"Saved model config -> {args.output.with_suffix('.json')}")
 
 
 if __name__ == "__main__":

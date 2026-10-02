@@ -5,13 +5,17 @@ capstone/
 ├── .vscode/
 │   └── settings.json
 ├── app.py
-├── backend/
-│   ├── .env
-│   ├── __init__.py
-│   ├── cloud_config.py
-│   ├── upload_helper.py
-│   └── lambda/
-│       └── extract_audio_lambda.py
+├── archive/
+│   ├── backend/
+│   │   ├── __init__.py
+│   │   └── .env
+│   └── cloud_upload/
+│       └── legacy upload helpers
+├── demo/
+│   ├── full-match.mp4
+│   └── generated/
+│       ├── selected-range.mp4
+│       └── selected-range.wav
 ├── constants/
 │   ├── __init__.py
 │   └── constants.py
@@ -22,7 +26,8 @@ capstone/
 │   │   └── matches.csv
 │   ├── modelling/
 │   │   ├── final_model/
-│   │   │   └── model_bundle.joblib
+│   │   │   ├── model.ubj
+│   │   │   └── model.json
 │   │   ├── parameters/
 │   │   │   └── model_search_results.csv
 │   │   ├── performance/

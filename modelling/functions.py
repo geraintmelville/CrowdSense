@@ -7,8 +7,6 @@ window / 0.48s stride), 11 raw YAMNet score columns, and a 16-dim
 PCA-reduced embedding
 """
 
-import argparse
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -17,8 +15,7 @@ from sklearn.model_selection import GroupKFold
 from xgboost import XGBClassifier
 
 from constants import (
-    CV_FOLDS, LOOKBACK_SEC, MERGE_GAP_SEC, MINIMUM_RECALL, N_ITER,
-    MODEL_N_JOBS, POSTROLL_SEC, RANDOM_STATE, SCORE_INDICES, TEST_MATCH_IDS,
+    MODEL_N_JOBS, SCORE_INDICES, TEST_MATCH_IDS,
     YAMNET_STRIDE_SEC, YAMNET_WINDOW_SEC,
 )
 
@@ -122,10 +119,13 @@ def recall_budget_curve(
     if not raw_durations:
         raise ValueError("raw_durations is required to compute footage budget")
 
-    by_match: dict[int, tuple[np.ndarray, np.ndarray, list[tuple[float, float, str]]]] = {}
+    by_match: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = {}
     for match_id in np.unique(groups):
         mask = groups == match_id
-        by_match[int(match_id)] = (starts[mask], probabilities[mask], labels.get(int(match_id), []))
+        match_labels = labels.get(int(match_id), [])
+        label_starts = np.fromiter((start for start, _, _ in match_labels), dtype=float)
+        label_ends = np.fromiter((end for _, end, _ in match_labels), dtype=float)
+        by_match[int(match_id)] = (starts[mask], probabilities[mask], label_starts, label_ends)
 
     raw_seconds = sum(raw_durations.get(match_id, 0.0) for match_id in by_match)
     if not raw_seconds:
@@ -138,16 +138,26 @@ def recall_budget_curve(
     for threshold in thresholds:
         total_found = total_labels = 0
         total_seconds = 0.0
-        for match_starts, match_probs, match_labels in by_match.values():
-            intervals = merge_intervals(
-                [(max(0, s - lookback), s + WINDOW_SEC + postroll)
-                 for s, p in zip(match_starts, match_probs) if p >= threshold],
-                merge_gap,
+        for match_starts, match_probs, label_starts, label_ends in by_match.values():
+            selected_starts = np.sort(match_starts[match_probs >= threshold].astype(float))
+            total_labels += len(label_starts)
+            if not selected_starts.size:
+                continue
+
+            interval_starts = np.maximum(0.0, selected_starts - lookback)
+            interval_ends = selected_starts + WINDOW_SEC + postroll
+            breaks = np.flatnonzero(interval_starts[1:] > interval_ends[:-1] + merge_gap) + 1
+            group_starts = np.concatenate(([0], breaks))
+            group_ends = np.concatenate((breaks - 1, [len(selected_starts) - 1]))
+            merged_starts = interval_starts[group_starts]
+            merged_ends = interval_ends[group_ends]
+
+            total_seconds += np.sum(merged_ends - merged_starts)
+            containing = np.searchsorted(merged_starts, label_starts, side="right") - 1
+            valid = containing >= 0
+            total_found += np.count_nonzero(
+                valid & (merged_ends[np.maximum(containing, 0)] >= label_ends)
             )
-            found, count, seconds = coverage_metrics(match_labels, intervals)
-            total_found += found
-            total_labels += count
-            total_seconds += seconds
         budgets.append(total_seconds / raw_seconds)
         recalls.append(total_found / total_labels if total_labels else 0.0)
 
@@ -318,16 +328,3 @@ def load_best_candidate_config(results_path: Path) -> dict[str, float]:
         )
     row = results.iloc[0]
     return {"lookback": float(row["lookback"]), "postroll": float(row["postroll"]), "merge_gap": float(row["merge_gap"])}
-
-@dataclass
-class CandidateConfig:
-    """Bundles the candidate-window-generation settings threaded through
-    recall_budget_curve() calls, instead of passing lookback/postroll/
-    merge_gap as separate arguments at every call site."""
-    lookback: float
-    postroll: float
-    merge_gap: float
-
-    @classmethod
-    def from_args(cls, args: argparse.Namespace) -> "CandidateConfig":
-        return cls(lookback=args.lookback, postroll=args.postroll, merge_gap=args.merge_gap)

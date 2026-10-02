@@ -78,7 +78,10 @@ st.markdown(
     """
     `save_final_model.py` selects a single deployment threshold: the highest-recall
     operating point whose candidate-footage budget stays within a configured limit (30% by
-    default), read off the same recall-vs-budget curve used in tuning and evaluation.
+    default), using pooled grouped out-of-fold predictions across the training matches.
+    The curve uses the same recall-vs-budget calculation as tuning and evaluation, but is
+    built from OOF probabilities so each threshold score comes from a model that did not
+    train on that match. The final deployment model is then refit on all training matches.
     """
 )
 
@@ -89,7 +92,6 @@ st.markdown(
       (crowd spike → quiet period → restart whistle) — from cheap post-hoc rolling filters
       up to a sequence model as a stretch goal.
     - Sweeping a frame-merge factor against already-cached probabilities (no re-extraction).
-    - Consolidating the PCA-fitting logic so there's exactly one fitted PCA in the pipeline.
     - Per-match recall breakdown in `eval_model.py`, not just the pooled curve.
     """
 )

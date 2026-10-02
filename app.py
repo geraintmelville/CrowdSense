@@ -25,7 +25,7 @@ pages = {
     "Deep Dive Docs": [
         st.Page(
             "views/architecture.py",
-            title="System Architecture / Cloud Infrastructure",
+            title="System Architecture / Demo Workflow",
             icon=":material/account_tree:",
         ),
         st.Page(

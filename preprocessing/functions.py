@@ -1,8 +1,6 @@
 import subprocess
 import zipfile
 import imageio_ffmpeg
-import os
-import hashlib
 import re
 import shutil
 import wave
@@ -12,7 +10,10 @@ from pathlib import Path
 from typing import Any
 import sqlite3
 
-from constants import SCORE_INDICES
+import numpy as np
+import pandas as pd
+
+from constants import SCORE_INDICES, YAMNET_STRIDE_SEC
 
 CLIP_FILENAME_REGEX = re.compile(r"^(?P<clip_num>\d+)\s+(?P<timestamp>\d{6})_-_(?P<desc>.+?)\.[a-zA-Z0-9]+$")
 
@@ -266,3 +267,50 @@ def list_matches(db_path: Path) -> list[tuple[int, str]]:
     ).fetchall()
     conn.close()
     return matches
+
+
+def extract_yamnet_match(
+    raw_filename: str,
+    audio_dir: Path,
+    score_indices: dict | tuple | list = SCORE_INDICES,
+    model=None,
+):
+    """Extract selected YAMNet scores and embeddings for one match audio file."""
+    from modelling.inference import extract_yamnet_features_streaming
+
+    audio_path = audio_dir / f"{Path(raw_filename).stem}.wav"
+    if not audio_path.exists():
+        print(f"[SKIP] Missing audio: {audio_path}")
+        return None
+
+    scores, embeddings, _ = extract_yamnet_features_streaming(
+        audio_path, include_embeddings=True, model=model
+    )
+    starts = np.arange(len(scores), dtype=np.float32) * YAMNET_STRIDE_SEC
+    indices = list(score_indices)
+    score_rows = scores[:, indices].astype(np.float32)
+    return starts, score_rows, embeddings.astype(np.float32)
+
+
+def build_feature_dataframe(
+    match_id: int,
+    raw_filename: str,
+    starts: np.ndarray,
+    score_rows: np.ndarray,
+    embeddings: np.ndarray,
+    pca_components: np.ndarray,
+    pca_mean: np.ndarray,
+) -> pd.DataFrame:
+    """Build the production feature schema using a previously fitted PCA transform."""
+    score_names = [f"yamnet_score_{index:03d}" for index in SCORE_INDICES]
+    pca_columns = [f"yamnet_embedding_pca_{index:02d}" for index in range(len(pca_components))]
+    pca_features = (embeddings - pca_mean) @ pca_components.T
+
+    features = pd.DataFrame({
+        "match_id": match_id,
+        "raw_filename": raw_filename,
+        "start_sec": starts,
+    })
+    features[score_names] = score_rows
+    features[pca_columns] = pca_features.astype(np.float32)
+    return features

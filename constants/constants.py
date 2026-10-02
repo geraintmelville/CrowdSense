@@ -4,6 +4,13 @@ from pathlib import Path
 
 # Repository data layout.
 DATA_DIR = Path("data")
+DEMO_DIR = Path("demo")
+DEMO_RAW_DIR = DEMO_DIR / "raw"
+DEMO_RAW_VIDEO_DIR = DEMO_RAW_DIR / "video"
+DEMO_RAW_AUDIO_DIR = DEMO_RAW_DIR / "audio"
+DEMO_RAW_CLIPS_DIR = DEMO_RAW_DIR / "clips"
+DEMO_FEATURES_DIR = DEMO_DIR / "features"
+DEMO_GENERATED_DIR = DEMO_DIR / "generated"
 METADATA_DIR = DATA_DIR / "metadata"
 RAW_DIR = DATA_DIR / "raw"
 RAW_VIDEO_DIR = RAW_DIR / "video"
@@ -19,7 +26,7 @@ MODEL_RESULTS_PATH = MODELLING_DIR / "parameters" / "model_search_results.csv"
 TEST_PROBABILITIES_PATH = MODELLING_DIR / "predictions" / "yamnet_audio_test_probabilities.csv"
 MODEL_PERFORMANCE_DIR = MODELLING_DIR / "performance"
 RECALL_BUDGET_PLOT_PATH = MODEL_PERFORMANCE_DIR / "recall_budget_curve_test.png"
-MODEL_BUNDLE_PATH = MODELLING_DIR / "final_model" / "model_bundle.joblib"
+MODEL_PATH = MODELLING_DIR / "final_model" / "model.ubj"
 
 # YAMNet feature extraction.
 YAMNET_SAMPLE_RATE = 16_000

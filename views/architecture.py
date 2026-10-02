@@ -1,66 +1,57 @@
-"""System architecture and cloud infrastructure documentation page."""
+"""System architecture and local demo workflow documentation page."""
 
 import streamlit as st
 
 
 st.title("System Architecture")
-st.caption("How upload, storage, extraction, and inference fit together.")
+st.caption("How a selected match segment becomes timestamped highlight candidates.")
 
 st.header("Architecture Overview")
 st.markdown(
     """
-    CrowdSense accepts full raw match video through a direct-to-cloud upload. The cloud
-    extracts its audio track automatically, then the app scores it with YAMNet + XGBoost.
+    CrowdSense selects a time range from a full match stored in `demo/raw/video/`, creates a compact
+    local video segment, extracts its audio, and scores it with YAMNet + XGBoost.
     """
 )
 
-st.header("Cloud Upload Flow")
+st.header("Live Demo Flow")
 st.markdown(
     """
-    1. **Browser → S3, directly.** The dashboard requests a presigned POST URL; the raw
-       video is uploaded straight from the browser to S3 (`raw/<key>.mp4`) and never passes
-       through the Streamlit server's memory.
-    2. **S3 → Lambda, automatically.** An `ObjectCreated` event on `raw/` triggers a Lambda
-       function that runs ffmpeg (via a Lambda layer, since there's no apt/yum in the Lambda
-       runtime) to extract the audio track.
-    3. **Lambda → S3.** The extracted audio is written to `audio/<key>.wav`, and the raw
-       video is deleted from the extraction step's working area (the original raw video
-       itself is retained in S3 for in-app playback until lifecycle rules clean it up).
-     4. **App polls, then downloads.** The dashboard polls for the extracted audio object,
-       downloads just that (small) file, and scores it with the trained model.
-    5. **Playback.** A presigned GET URL lets the dashboard stream the original raw video
-       and seek straight to a candidate clip's timestamp for review.
+    1. **Choose source and range.** Select a full-match MP4 from `demo/raw/video/` and set the start
+       and end timecodes. The controls default to the first 25 minutes.
+    2. **Create demo segment.** ffmpeg writes a 720p H.264 segment at CRF 28 with AAC audio
+       under `demo/generated/`.
+    3. **Extract and score.** The app saves a mono 22.05 kHz WAV beside the segment, then
+       runs YAMNet, the saved PCA projection, and the trained XGBoost classifier.
+    4. **Review candidates.** The dashboard displays merged start/end timestamps. Set
+       `CROWDSENSE_DEMO_YOUTUBE_URL` to the uploaded segment's YouTube URL to enable direct
+       timestamp links and in-page playback.
 
-    This keeps the only expensive/large transfer (the raw video) off the Streamlit server
-    entirely, and keeps Lambda scoped to just the ffmpeg step — no TensorFlow/YAMNet there.
+    Generated segments and WAV files are reproducible local artifacts and are ignored by
+    Git. YouTube timestamps are relative to the selected segment, not the full match.
     """
 )
 
 st.header("Component Responsibilities")
 st.markdown(
     """
-    - **Streamlit app (`dashboard.py`)** — uploads cloud video, triggers scoring, and
-      renders candidate clips and video playback.
-    - **`backend/upload_helper.py`** — builds presigned S3 POST requests for direct
-      browser-to-cloud upload.
-    - **`backend/lambda/extract_audio_lambda.py`** — S3-triggered ffmpeg audio extraction;
-      needs ephemeral storage sized above the largest raw video, since both the mp4 and wav
-      land in `/tmp` temporarily.
-    - **`backend/cloud_config.py`** — bucket name, region, and prefix configuration, read
-      from environment variables.
-    - **Inference (`preprocessing/extract_features.py` + `data/modelling/final_model/model_bundle.joblib`)** —
-      YAMNet feature extraction and XGBoost scoring for uploaded footage.
+    - **Streamlit app (`dashboard.py`)** — chooses a full match and time range, creates the
+      demo segment, scores it, and renders timestamped candidates.
+    - **`preprocessing/extract_audio.py`** — creates the 720p demo segment and extracts its
+      audio using ffmpeg.
+    - **Inference (`modelling/inference.py` + `data/modelling/final_model/model.ubj` + `model.json`)** —
+      YAMNet feature extraction and XGBoost scoring for the selected segment.
     """
 )
 
-st.header("Model Bundle")
+st.header("Model Artifacts")
 st.markdown(
     """
-    `save_final_model.py` trains once on the complete feature set and persists everything
-    the dashboard needs to score
-    new footage without retraining: the trained model, decision threshold, feature column
-    list, YAMNet score indices, window/stride, PCA components + mean, and the candidate-window
-    settings (lookback/postroll/merge-gap).
+    `save_final_model.py` trains once on the complete feature set and persists the XGBoost
+    booster in native UBJ format plus inference configuration in JSON. Together they contain
+    everything the dashboard needs to score new audio without retraining: the decision
+    threshold, feature column list, YAMNet score indices, window/stride, PCA components + mean,
+    and candidate-window settings (lookback/postroll/merge-gap).
     """
 )
 
@@ -69,9 +60,139 @@ st.markdown(
     """
     - This is a **low-traffic prototype**, not a production service — no autoscaling or
       multi-user concerns have been designed for yet.
-    - Credentials and bucket config are supplied via environment variables (`.env`), never
-      hardcoded.
-    - Raw video in S3 is time-limited by lifecycle rules rather than deleted immediately,
-      to allow in-app playback of recently uploaded matches.
+    - Set `CROWDSENSE_DEMO_YOUTUBE_URL` in the environment to the uploaded segment URL.
+    - Place source full-match videos under `demo/raw/video/`; generated clips and audio stay in the
+      ignored `demo/generated/` directory.
+    """
+)"""System architecture and local demo workflow documentation page."""
+
+import streamlit as st
+
+
+st.title("System Architecture")
+st.caption("How a selected match segment becomes timestamped highlight candidates.")
+
+st.header("Architecture Overview")
+st.markdown(
+    """
+    CrowdSense selects a time range from a full match stored in `demo/raw/video/`, creates a compact
+    local video segment, extracts its audio, and scores it with YAMNet + XGBoost.
     """
 )
+
+st.header("Live Demo Flow")
+st.markdown(
+    """
+    1. **Choose source and range.** Select a full-match MP4 from `demo/raw/video/` and set the start
+       and end timecodes. The controls default to the first 25 minutes.
+    2. **Create demo segment.** ffmpeg writes a 720p H.264 segment at CRF 28 with AAC audio
+       under `demo/generated/`.
+    3. **Extract and score.** The app saves a mono 22.05 kHz WAV beside the segment, then
+       runs YAMNet, the saved PCA projection, and the trained XGBoost classifier.
+    4. **Review candidates.** The dashboard displays merged start/end timestamps. Set
+       `CROWDSENSE_DEMO_YOUTUBE_URL` to the uploaded segment's YouTube URL to enable direct
+       timestamp links and in-page playback.
+
+    Generated segments and WAV files are reproducible local artifacts and are ignored by
+    Git. YouTube timestamps are relative to the selected segment, not the full match.
+    """
+)
+
+st.header("Component Responsibilities")
+st.markdown(
+    """
+    - **Streamlit app (`dashboard.py`)** — chooses a full match and time range, creates the
+      demo segment, scores it, and renders timestamped candidates.
+    - **`preprocessing/extract_audio.py`** — creates the 720p demo segment and extracts its
+      audio using ffmpeg.
+    - **Inference (`modelling/inference.py` + `data/modelling/final_model/model.ubj` + `model.json`)** —
+      YAMNet feature extraction and XGBoost scoring for the selected segment.
+    """
+)
+
+st.header("Model Artifacts")
+st.markdown(
+    """
+    `save_final_model.py` trains once on the complete feature set and persists the XGBoost
+    booster in native UBJ format plus inference configuration in JSON. Together they contain
+    everything the dashboard needs to score new audio without retraining: the decision
+    threshold, feature column list, YAMNet score indices, window/stride, PCA components + mean,
+    and candidate-window settings (lookback/postroll/merge-gap).
+    """
+)
+
+st.header("Operational Notes")
+st.markdown(
+    """
+    - This is a **low-traffic prototype**, not a production service — no autoscaling or
+      multi-user concerns have been designed for yet.
+    - Set `CROWDSENSE_DEMO_YOUTUBE_URL` in the environment to the uploaded segment URL.
+    - Place source full-match videos under `demo/raw/video/`; generated clips and audio stay in the
+      ignored `demo/generated/` directory.
+    """
+)"""System architecture and local demo workflow documentation page."""
+
+import streamlit as st
+
+
+st.title("System Architecture")
+st.caption("How a selected match segment becomes timestamped highlight candidates.")
+
+st.header("Architecture Overview")
+st.markdown(
+    """
+    CrowdSense selects a time range from a full match stored in `demo/raw/video/`, creates a compact
+    local video segment, extracts its audio, and scores it with YAMNet + XGBoost.
+    """
+)
+
+st.header("Live Demo Flow")
+st.markdown(
+    """
+    1. **Choose source and range.** Select a full-match MP4 from `demo/raw/video/` and set the start
+       and end timecodes. The controls default to the first 25 minutes.
+    2. **Create demo segment.** ffmpeg writes a 720p H.264 segment at CRF 28 with AAC audio
+       under `demo/generated/`.
+    3. **Extract and score.** The app saves a mono 22.05 kHz WAV beside the segment, then
+       runs YAMNet, the saved PCA projection, and the trained XGBoost classifier.
+    4. **Review candidates.** The dashboard displays merged start/end timestamps. Set
+       `CROWDSENSE_DEMO_YOUTUBE_URL` to the uploaded segment's YouTube URL to enable direct
+       timestamp links and in-page playback.
+
+    Generated segments and WAV files are reproducible local artifacts and are ignored by
+    Git. YouTube timestamps are relative to the selected segment, not the full match.
+    """
+)
+
+st.header("Component Responsibilities")
+st.markdown(
+    """
+    - **Streamlit app (`dashboard.py`)** — chooses a full match and time range, creates the
+      demo segment, scores it, and renders timestamped candidates.
+    - **`preprocessing/extract_audio.py`** — creates the 720p demo segment and extracts its
+      audio using ffmpeg.
+    - **Inference (`modelling/inference.py` + `data/modelling/final_model/model.ubj` + `model.json`)** —
+      YAMNet feature extraction and XGBoost scoring for the selected segment.
+    """
+)
+
+st.header("Model Artifacts")
+st.markdown(
+    """
+    `save_final_model.py` trains once on the complete feature set and persists the XGBoost
+    booster in native UBJ format plus inference configuration in JSON. Together they contain
+    everything the dashboard needs to score new audio without retraining: the decision
+    threshold, feature column list, YAMNet score indices, window/stride, PCA components + mean,
+    and candidate-window settings (lookback/postroll/merge-gap).
+    """
+)
+
+st.header("Operational Notes")
+st.markdown(
+    """
+    - This is a **low-traffic prototype**, not a production service — no autoscaling or
+      multi-user concerns have been designed for yet.
+    - Set `CROWDSENSE_DEMO_YOUTUBE_URL` in the environment to the uploaded segment URL.
+    - Place source full-match videos under `demo/raw/video/`; generated clips and audio stay in the
+      ignored `demo/generated/` directory.
+    """

@@ -22,27 +22,26 @@ Usage:
 """
 
 import argparse
-from functools import lru_cache
-import os
 import time
 from pathlib import Path
 import tempfile
 
 import numpy as np
 import pandas as pd
-import soundfile as sf
-from math import gcd
-from scipy.signal import resample_poly
 from sklearn.decomposition import IncrementalPCA
 
 from constants import (
     CLIP_DATABASE_PATH, FEATURES_DIR, PCA_BATCH_SIZE, PCA_COMPONENTS,
     PCA_DIR, RAW_AUDIO_DIR, SCORE_INDICES, TEST_MATCH_IDS,
-    YAMNET_CHUNK_SEC, YAMNET_LOOKAHEAD_SEC, YAMNET_SAMPLE_RATE,
     YAMNET_STRIDE_SEC, YAMNET_WINDOW_SEC,
 )
 
-from preprocessing.functions import list_matches
+from preprocessing.functions import (
+    build_feature_dataframe,
+    extract_yamnet_match,
+    list_matches,
+)
+from modelling.inference import load_yamnet_model
 
 # --- Configuration ----------------------------------------------------------
 
@@ -53,62 +52,6 @@ WINDOW_SEC = YAMNET_WINDOW_SEC
 STRIDE_SEC = YAMNET_STRIDE_SEC
 
 
-@lru_cache(maxsize=1)
-def load_yamnet_model():
-    """Load YAMNet once for callers that do not provide a model."""
-    cache_dir = Path(os.environ.setdefault(
-        "TFHUB_CACHE_DIR", str(Path.home() / ".cache" / "tensorflow_hub")
-    ))
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    import tensorflow_hub as hub
-
-    return hub.load("https://tfhub.dev/google/yamnet/1")
-
-
-def extract_yamnet_features_streaming(audio_path, include_embeddings=True, model=None):
-    """Extract YAMNet features from bounded audio chunks."""
-    model = model if model is not None else load_yamnet_model()
-    target_rate = YAMNET_SAMPLE_RATE
-    chunk_seconds = YAMNET_CHUNK_SEC
-    lookahead_seconds = YAMNET_LOOKAHEAD_SEC
-    scores_chunks = []
-    embedding_chunks = [] if include_embeddings else None
-
-    with sf.SoundFile(audio_path) as audio:
-        source_rate = audio.samplerate
-        chunk_frames = max(1, int(chunk_seconds * source_rate))
-        lookahead_frames = int(lookahead_seconds * source_rate)
-        up = target_rate // gcd(target_rate, source_rate)
-        down = source_rate // gcd(target_rate, source_rate)
-        total_duration = audio.frames / source_rate
-
-        for source_start in range(0, audio.frames, chunk_frames):
-            audio.seek(source_start)
-            wav_data = audio.read(
-                min(audio.frames - source_start, chunk_frames + lookahead_frames),
-                dtype="float32",
-                always_2d=False,
-            )
-            if wav_data.ndim > 1:
-                wav_data = wav_data.mean(axis=1)
-            if source_rate != target_rate:
-                wav_data = resample_poly(wav_data, up, down).astype(np.float32)
-
-            scores, embeddings, _ = model(wav_data)
-            chunk_duration = min(chunk_seconds, total_duration - source_start / source_rate)
-            frame_starts = np.arange(len(scores), dtype=np.float32) * YAMNET_STRIDE_SEC
-            keep = frame_starts < chunk_duration
-            scores_chunks.append(scores.numpy()[keep])
-            if include_embeddings:
-                embedding_chunks.append(embeddings.numpy()[keep])
-
-    return (
-        np.concatenate(scores_chunks),
-        np.concatenate(embedding_chunks) if include_embeddings else None,
-        total_duration,
-    )
-
-
 def extract_match(raw_filename, audio_dir, score_indices=SCORE_INDICES, model=None):
     """Return (starts, score_features, embeddings) for one match's audio file.
 
@@ -116,18 +59,7 @@ def extract_match(raw_filename, audio_dir, score_indices=SCORE_INDICES, model=No
     cadence exactly, so each raw frame IS a window. We just slice the score
     columns we care about and pass the embeddings straight through to PCA.
     """
-    audio_path = audio_dir / f"{Path(raw_filename).stem}.wav"
-    if not audio_path.exists():
-        print(f"[SKIP] Missing audio: {audio_path}")
-        return None
-
-    scores, embeddings, duration = extract_yamnet_features_streaming(
-        audio_path, include_embeddings=True, model=model
-    )
-    starts = (np.arange(len(scores), dtype=np.float32) * STRIDE_SEC)
-    score_rows = scores[:, list(score_indices)].astype(np.float32)
-    embedding_rows = embeddings.astype(np.float32)
-    return starts, score_rows, embedding_rows
+    return extract_yamnet_match(raw_filename, audio_dir, score_indices, model)
 
 
 def fit_pca(embedding_paths, n_components, batch_size):
@@ -182,8 +114,6 @@ def main():
     if missing_test_ids:
         raise RuntimeError(f"TEST_MATCH_IDS not found among matches: {sorted(missing_test_ids)}")
 
-    score_names = [f"yamnet_score_{index:03d}" for index in SCORE_INDICES]
-    pca_columns = [f"yamnet_embedding_pca_{index:02d}" for index in range(PCA_COMPONENTS)]
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="yamnet_extract_") as temp_dir:
@@ -236,15 +166,15 @@ def main():
         total_rows = 0
         for entry in match_cache:
             embeddings = np.load(entry["embedding_path"])
-            pca_features = pca.transform(embeddings).astype(np.float32)
-
-            df = pd.DataFrame({
-                "match_id": entry["match_id"],
-                "raw_filename": entry["raw_filename"],
-                "start_sec": entry["starts"],
-            })
-            df[score_names] = entry["score_rows"]
-            df[pca_columns] = pca_features
+            df = build_feature_dataframe(
+                entry["match_id"],
+                entry["raw_filename"],
+                entry["starts"],
+                entry["score_rows"],
+                embeddings,
+                pca.components_,
+                pca.mean_,
+            )
 
             output_path = args.output_dir / f"{Path(entry['raw_filename']).stem}.parquet"
             df.to_parquet(output_path, index=False)

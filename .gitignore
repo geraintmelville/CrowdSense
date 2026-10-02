@@ -1,5 +1,5 @@
 # Local secrets and environment configuration
-backend/.env
+archive/backend/.env
 .env
 .streamlit/secrets.toml
 
@@ -16,12 +16,14 @@ dist/
 venv/
 env/
 
-# Data artefacts -- raw footage, extracted audio, highlight zips,
-# derived features/PCA, and the trained model bundle are all
-# regenerable from the pipeline scripts and too large/binary for git.
+# Data artefacts -- raw footage, extracted audio, highlight zips, and
+# derived features/PCA are regenerable from the pipeline scripts.
 data/raw/
 data/processed/
 data/modelling/predictions/
+demo/generated/
+demo/raw/
+archive/
 
 # OS / editor
 .DS_Store
