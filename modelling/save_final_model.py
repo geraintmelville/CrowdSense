@@ -18,7 +18,8 @@ saved to --pca-transform (pca_transform.npz).
 Threshold selection: this selects the highest-recall operating point whose
 measured candidate budget is at most --budget. Because thresholds are swept
 over observed probability quantiles, the achieved budget may be below the
-requested budget when no exact operating point exists.
+requested budget when no exact operating point exists. Both OOF threshold
+selection and final fitting exclude TEST_MATCH_IDS.
 """
 
 import argparse
@@ -32,10 +33,10 @@ from constants import (
 )
 
 from modelling.functions import (
-    STRIDE_SEC, WINDOW_SEC, YAMNET_SCORE_INDICES, build_model,
+    STRIDE_SEC, TEST_MATCH_IDS, WINDOW_SEC, YAMNET_SCORE_INDICES, build_model,
     build_targets, load_best_candidate_config, load_best_params, load_features,
     load_labels, load_raw_durations, pooled_oof_predict, recall_budget_curve,
-    required_feature_columns,
+    required_feature_columns, train_test_split_by_match_id,
 )
 from modelling.model_artifact import save_model_artifact
 
@@ -127,7 +128,7 @@ def main() -> None:
     groups = df["match_id"].to_numpy()
     starts = df["start_sec"].to_numpy()
     feature_matrix = df[selected_features].to_numpy()
-    train_idx = np.arange(len(df))
+    train_idx, _ = train_test_split_by_match_id(groups, TEST_MATCH_IDS)
 
     if np.unique(targets[train_idx]).size < 2:
         raise RuntimeError("Training split needs both positive and negative windows")
@@ -135,14 +136,16 @@ def main() -> None:
     random_state = model_params.pop("random_state", args.random_state)
     model = build_model(model_params, random_state)
     probabilities, _ = pooled_oof_predict(
-        feature_matrix, targets, groups, model_params, random_state, n_folds=4,
+        feature_matrix[train_idx], targets[train_idx], groups[train_idx],
+        model_params, random_state, n_folds=4,
     )
     threshold, recall, budget = select_threshold(
-        groups, starts, probabilities,
+        groups[train_idx], starts[train_idx], probabilities,
         clip_labels, raw_durations, merge_gap, lookback, postroll, args.budget,
     )
     print(f"Decision threshold: {threshold:.4f} (recall={recall:.1%}, budget={budget:.1%}; "
-          f"requested max={args.budget:.1%} on training data)")
+          f"requested max={args.budget:.1%} on training data; "
+          f"test matches excluded: {sorted(TEST_MATCH_IDS)})")
 
     model.fit(feature_matrix[train_idx], targets[train_idx])
 

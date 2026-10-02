@@ -97,6 +97,12 @@ CANDIDATE_PARAM_GRID = {
     "postroll": [5.0, 10.0, 15.0],
     "merge_gap": [1.0, 5.0, 10.0],
 }
+RESULTS = {
+    "recall": 0.79,
+    "budget": 0.28,
+    "baseline_recall": 0.61,
+    "baseline_budget": 0.42,
+}
 
 __all__ = [
     name for name in globals()

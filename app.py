@@ -9,37 +9,20 @@ st.set_page_config(
     layout="wide",
 )
 
+V = "src/crowdsense/views"
+
 pages = {
     "Welcome": [
-        st.Page(
-            "src/crowdsense/views/overview.py",
-            title="Welcome",
-            icon=":material/home:",
-        ),
+        st.Page(f"{V}/overview.py", title="Welcome & Pipeline Map", icon=":material/home:"),
     ],
     "Demo": [
-        st.Page(
-            "src/crowdsense/views/dashboard.py",
-            title="Highlight Finder Demo",
-            icon=":material/live_tv:",
-        ),
+        st.Page(f"{V}/dashboard.py", title="Highlight Finder Demo", icon=":material/live_tv:"),
     ],
     "Deep Dive Docs": [
-        st.Page(
-            "src/crowdsense/views/architecture.py",
-            title="System Architecture / Demo Workflow",
-            icon=":material/account_tree:",
-        ),
-        st.Page(
-            "src/crowdsense/views/model_pipeline.py",
-            title="Model & YAMNet Pipeline",
-            icon=":material/model_training:",
-        ),
-        st.Page(
-            "src/crowdsense/views/dataset_info.py",
-            title="Dataset & Ingestion",
-            icon=":material/database:",
-        ),
+        st.Page(f"{V}/preprocessing.py", title="Preprocessing", icon=":material/database:"),
+        st.Page(f"{V}/modelling.py", title="Modelling", icon=":material/model_training:"),
+        st.Page(f"{V}/performance.py", title="Performance", icon=":material/bar_chart:"),
+        st.Page(f"{V}/inference.py", title="Inference & Demo Flow", icon=":material/account_tree:"),
     ],
 }
 
