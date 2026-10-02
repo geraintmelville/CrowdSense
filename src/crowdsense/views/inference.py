@@ -7,12 +7,13 @@ from src.crowdsense.nav import page_header, section
 P = "inference"
 page_header(P, "Inference & Demo Flow", "How a selected match segment becomes timestamped highlight candidates.")
 
-with section(P, "segment", "1 · Segment creation"):
+with section(P, "segment", "1 · Choose match audio"):
     st.markdown(
         """
-        Pick a full-match MP4 from `demo/raw/video/` and a start/end timecode (default: first
-        25 minutes). ffmpeg writes a 720p H.264 segment (CRF 28, AAC) to `demo/generated/`, then
-        a mono 22.05 kHz WAV beside it. Generated files are reproducible and Git-ignored.
+        Both demo modes use the same prepared match. Quick demo selects its cached feature file
+        from `demo/features/`; Full demo selects the corresponding WAV from `demo/raw/audio/`
+        and extracts the features during analysis. Prepare the WAV from a source MP4 in
+        `demo/raw/video/` with `python -m demo.prepare_demo`.
         """
     )
 
@@ -20,8 +21,9 @@ with section(P, "scoring", "2 · Scoring"):
     st.markdown(
         """
         `modelling/inference.py` runs YAMNet, applies the saved PCA projection (never refit),
-        and scores each window with the XGBoost model from `model.ubj` + `model.json`. A Quick
-        demo mode skips YAMNet and scores cached feature files from `demo/features/`.
+        and scores each window with the XGBoost model from `model.ubj` + `model.json`. Quick demo
+        skips YAMNet and scores cached features; Full demo computes the same score and PCA
+        features from the selected match audio.
         """
     )
 
@@ -38,8 +40,8 @@ with section(P, "review", "4 · Dashboard review"):
     st.markdown(
         """
         The dashboard lists merged start/end timestamps. Set `CROWDSENSE_DEMO_YOUTUBE_URL` to the
-        uploaded segment's URL to enable timestamp links and in-page playback. Timestamps are
-        relative to the selected segment, not the full match.
+        selected match's URL to enable timestamp links and in-page playback. Timestamps are
+        relative to the start of the selected match audio.
 
         This is a low-traffic prototype, not a production service.
         """

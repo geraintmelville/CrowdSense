@@ -6,14 +6,11 @@ The app combines time-range extraction from match video, YAMNet audio features, 
 
 ## Live demo
 
-1. Put the full-match MP4 in `demo/`.
+1. Put the full-match MP4 in `demo/raw/video/` and prepare the demo with `python -m demo.prepare_demo`.
 2. Run `streamlit run app.py` from the project root.
-3. On the Live Highlight Finder Dashboard, select the full match and enter its start and end timecodes. The initial range is the first 25 minutes.
-4. The app creates a 720p H.264 segment at CRF 28 in `demo/generated/`, extracts mono 22.05 kHz WAV audio, runs the model, and displays candidate timestamps.
+3. On the dashboard, choose Quick demo to score the prepared feature file or Full demo to select the matching WAV and extract features from the audio before scoring.
 
-Set `CROWDSENSE_DEMO_YOUTUBE_URL` in the environment to the YouTube URL for the generated segment. This enables timestamped links and in-page playback. Candidate times are relative to the selected segment, so the YouTube URL must refer to that same segment.
-
-Generated segments and audio are saved under `demo/generated/`, which is ignored by Git. Source match videos belong under `demo/raw/video/`.
+Set `CROWDSENSE_DEMO_YOUTUBE_URL` in the environment to the YouTube URL for the selected match. This enables timestamped links and in-page playback. Candidate times are relative to the selected match audio, which should start at the beginning of that video.
 
 To prepare a manually trimmed demo match and its highlight ZIP, place the MP4 in
 `demo/raw/video/` and the matching ZIP in `demo/raw/clips/`, then run
