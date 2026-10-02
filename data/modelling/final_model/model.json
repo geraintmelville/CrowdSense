@@ -1,5 +1,5 @@
 {
-  "threshold": 0.6158501012156707,
+  "threshold": 0.5399488654344589,
   "feature_columns": [
     "yamnet_score_006",
     "yamnet_score_009",

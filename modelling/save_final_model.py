@@ -51,28 +51,22 @@ def select_threshold(
     postroll: float,
     budget_limit: float,
 ) -> tuple[float, float, float]:
-    """Select the highest-recall threshold within the requested budget."""
+    """Select the operating point whose budget is closest to the requested budget."""
     if not 0.0 <= budget_limit <= 1.0:
         raise ValueError(f"budget must be between 0 and 1, got {budget_limit}")
     budgets, recalls, thresholds = recall_budget_curve(
         groups, starts, probabilities, labels, merge_gap,
         raw_durations=raw_durations, lookback=lookback, postroll=postroll,
+        n_thresholds=5000,
     )
-    # recall_budget_curve() includes an empty-candidate anchor at budget=0.
-    # It is useful for plotting, but must never become a deployable threshold.
-    eligible = np.flatnonzero(
-        (budgets > 1e-12) & (budgets <= budget_limit + 1e-12)
-    )
+    # Exclude the budget=0 anchor: it must never become a deployable threshold.
+    eligible = np.flatnonzero(budgets > 1e-12)
     if not eligible.size:
-        raise RuntimeError(
-            f"No non-empty threshold is available within budget={budget_limit:.1%}; "
-            "increase --budget or adjust the candidate-window settings."
-        )
-    highest_recall = recalls[eligible].max()
-    eligible = eligible[np.isclose(recalls[eligible], highest_recall)]
-    position = int(eligible[np.argmax(budgets[eligible])])
+        raise RuntimeError("No non-empty threshold is available; adjust the candidate-window settings.")
+    distance = np.abs(budgets[eligible] - budget_limit)
+    closest = eligible[np.isclose(distance, distance.min())]
+    position = int(closest[np.argmax(recalls[closest])])  # tie-break on recall
     return float(thresholds[position]), float(recalls[position]), float(budgets[position])
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
