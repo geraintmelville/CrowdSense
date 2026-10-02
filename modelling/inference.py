@@ -77,6 +77,43 @@ def format_timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
+def _build_candidate_clips(
+    starts: np.ndarray, probabilities: np.ndarray, duration: float, bundle: dict
+) -> tuple[pd.DataFrame, float, int]:
+    selected_starts = starts[probabilities >= bundle["threshold"]]
+    intervals = merge_intervals(
+        [(max(0, start - bundle["lookback"]), min(duration, start + bundle["window_sec"] + bundle["postroll"]))
+         for start in selected_starts],
+        bundle["merge_gap"],
+    )
+    clips = pd.DataFrame(intervals, columns=["start_sec", "end_sec"])
+    clips["length_sec"] = clips["end_sec"] - clips["start_sec"]
+    clips["start"] = clips["start_sec"].apply(format_timestamp)
+    clips["end"] = clips["end_sec"].apply(format_timestamp)
+    return clips, duration, len(starts)
+
+
+def score_precomputed_features(
+    features: pd.DataFrame, bundle: dict, duration: float
+) -> tuple[pd.DataFrame, float, int]:
+    """Score model-ready YAMNet feature rows without running YAMNet."""
+    feature_columns = bundle.get("feature_columns", [])
+    missing_columns = set(feature_columns) - set(features.columns)
+    if missing_columns:
+        raise ValueError(f"Precomputed features are missing model columns: {sorted(missing_columns)}")
+    if "start_sec" not in features.columns:
+        raise ValueError("Precomputed features must include start_sec")
+    if features.empty:
+        raise ValueError("Precomputed feature file contains no windows")
+
+    features = features.sort_values("start_sec")
+    starts = features["start_sec"].to_numpy(dtype=np.float64)
+    probabilities = bundle["model"].predict_proba(
+        features[feature_columns].to_numpy(dtype=np.float32)
+    )[:, 1]
+    return _build_candidate_clips(starts, probabilities, duration, bundle)
+
+
 def score_match(audio_path: Path, bundle: dict, yamnet_model=None) -> tuple[pd.DataFrame, float, int]:
     feature_columns = bundle.get("feature_columns", [])
     uses_pca = any(column.startswith("yamnet_embedding_pca_") for column in feature_columns)
@@ -101,15 +138,4 @@ def score_match(audio_path: Path, bundle: dict, yamnet_model=None) -> tuple[pd.D
         pca_features = (embeddings - pca_mean) @ pca_components.T
         feature_matrix = np.concatenate((feature_matrix, pca_features), axis=1).astype(np.float32)
     probabilities = bundle["model"].predict_proba(feature_matrix)[:, 1]
-
-    selected_starts = starts[probabilities >= bundle["threshold"]]
-    intervals = merge_intervals(
-        [(max(0, start - bundle["lookback"]), min(duration, start + window_sec + bundle["postroll"]))
-         for start in selected_starts],
-        bundle["merge_gap"],
-    )
-    clips = pd.DataFrame(intervals, columns=["start_sec", "end_sec"])
-    clips["length_sec"] = clips["end_sec"] - clips["start_sec"]
-    clips["start"] = clips["start_sec"].apply(format_timestamp)
-    clips["end"] = clips["end_sec"].apply(format_timestamp)
-    return clips, duration, len(starts)
+    return _build_candidate_clips(starts, probabilities, duration, bundle)

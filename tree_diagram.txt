@@ -1,4 +1,4 @@
-capstone/
+CrowdSense/
 ├── .gitignore
 ├── .streamlit/
 │   └── secrets.toml
@@ -6,19 +6,25 @@ capstone/
 │   └── settings.json
 ├── app.py
 ├── archive/
+│   ├── __init__.py
 │   ├── backend/
 │   │   ├── __init__.py
 │   │   └── .env
 │   └── cloud_upload/
-│       └── legacy upload helpers
-├── demo/
-│   ├── full-match.mp4
-│   └── generated/
-│       ├── selected-range.mp4
-│       └── selected-range.wav
+│       ├── __init__.py
+│       ├── cloud_config.py
+│       ├── cloud_config_regression_tests.py
+│       ├── extract_audio_lambda.py
+│       ├── s3_upload_script.py
+│       └── upload_helper.py
 ├── constants/
 │   ├── __init__.py
 │   └── constants.py
+├── crowdsense.egg-info/
+│   ├── dependency_links.txt
+│   ├── PKG-INFO
+│   ├── SOURCES.txt
+│   └── top_level.txt
 ├── data/
 │   ├── metadata/
 │   │   ├── clips.csv
@@ -26,8 +32,8 @@ capstone/
 │   │   └── matches.csv
 │   ├── modelling/
 │   │   ├── final_model/
-│   │   │   ├── model.ubj
-│   │   │   └── model.json
+│   │   │   ├── model.json
+│   │   │   └── model.ubj
 │   │   ├── parameters/
 │   │   │   └── model_search_results.csv
 │   │   ├── performance/
@@ -43,24 +49,44 @@ capstone/
 │   │       └── labels.csv
 │   └── raw/
 │       ├── audio/
-│       │   └── *.wav
 │       ├── clips/
-│       │   └── *.zip
 │       └── video/
-│           └── *.mp4
+├── demo/
+│   ├── clips.csv
+│   ├── clips_data.db
+│   ├── features/
+│   ├── matches.csv
+│   ├── prepare_demo.py
+│   └── raw/
+│       ├── audio/
+│       ├── clips/
+│       └── video/
 ├── modelling/
+│   ├── __init__.py
 │   ├── eval_model.py
 │   ├── functions.py
+│   ├── inference.py
+│   ├── model_artifact.py
 │   ├── save_final_model.py
 │   ├── train_predict.py
 │   └── tune_model.py
 ├── preprocessing/
+│   ├── __init__.py
 │   ├── build_clip_database.py
 │   ├── extract_audio.py
 │   ├── extract_features.py
 │   ├── extract_labels.py
 │   └── functions.py
+├── pyproject.toml
+├── README.md
 ├── requirements.txt
+├── test/
+│   ├── test_demo_media.py
+│   ├── test_inference.py
+│   ├── test_model_artifact.py
+│   ├── test_preprocess_demo.py
+│   ├── test_recall_budget_curve.py
+│   └── test.mp4
 ├── tree_diagram.txt
 └── views/
     ├── architecture.py

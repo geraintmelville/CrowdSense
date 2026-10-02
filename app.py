@@ -12,29 +12,31 @@ st.set_page_config(
 pages = {
     "Welcome": [
         st.Page(
-            "views/overview.py",
-            title="Overview / Holistic Project Summary",
+            "src/crowdsense/views/overview.py",
+            title="Welcome",
             icon=":material/home:",
         ),
+    ],
+    "Demo": [
         st.Page(
-            "views/dashboard.py",
-            title="Live Highlight Finder Dashboard",
+            "src/crowdsense/views/dashboard.py",
+            title="Highlight Finder Demo",
             icon=":material/live_tv:",
         ),
     ],
     "Deep Dive Docs": [
         st.Page(
-            "views/architecture.py",
+            "src/crowdsense/views/architecture.py",
             title="System Architecture / Demo Workflow",
             icon=":material/account_tree:",
         ),
         st.Page(
-            "views/model_pipeline.py",
+            "src/crowdsense/views/model_pipeline.py",
             title="Model & YAMNet Pipeline",
             icon=":material/model_training:",
         ),
         st.Page(
-            "views/dataset_info.py",
+            "src/crowdsense/views/dataset_info.py",
             title="Dataset & Ingestion",
             icon=":material/database:",
         ),

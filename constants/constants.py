@@ -2,9 +2,15 @@
 
 from pathlib import Path
 
+_THIS_FILE = Path(__file__).resolve()
+if _THIS_FILE.parents[2].name == "src":
+    ROOT_DIR = _THIS_FILE.parents[3]
+else:
+    ROOT_DIR = _THIS_FILE.parents[1]
+
 # Repository data layout.
-DATA_DIR = Path("data")
-DEMO_DIR = Path("demo")
+DATA_DIR = ROOT_DIR / "data"
+DEMO_DIR = ROOT_DIR / "demo"
 DEMO_RAW_DIR = DEMO_DIR / "raw"
 DEMO_RAW_VIDEO_DIR = DEMO_RAW_DIR / "video"
 DEMO_RAW_AUDIO_DIR = DEMO_RAW_DIR / "audio"
@@ -73,7 +79,7 @@ DEPLOYMENT_BUDGET = 0.30
 RANDOM_STATE = 42
 N_ITER = 60
 CV_FOLDS = 4
-MODEL_N_JOBS = 1
+MODEL_N_JOBS = 4
 MODEL_PARAM_DISTRIBUTIONS = {
     "n_estimators": [600, 900, 1200],
     "max_depth": [2, 3, 4],

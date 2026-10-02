@@ -1,5 +1,5 @@
 {
-  "threshold": 0.35575951199338873,
+  "threshold": 0.6158501012156707,
   "feature_columns": [
     "yamnet_score_006",
     "yamnet_score_009",
@@ -44,7 +44,7 @@
   ],
   "window_sec": 0.96,
   "stride_sec": 0.48,
-  "lookback": 30.0,
+  "lookback": 20.0,
   "postroll": 5.0,
   "merge_gap": 10.0,
   "pca_components": [

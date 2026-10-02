@@ -57,7 +57,8 @@ st.markdown(
     - **Dataset & Ingestion** — how raw footage, highlight clips, and labels become training data.
     - **System Architecture** — local video segment creation, audio extraction, and inference.
     - **Model & YAMNet Pipeline** — feature extraction, PCA, XGBoost, threshold selection.
-    - **Dashboard** (this app's main entry point) — choose a full-match time range and review candidates.
+    - **Welcome** — this project summary and current performance overview.
+    - **Demo** — score pre-extracted features quickly, or extract features from a selected video segment with YAMNet.
     """
 )
 
