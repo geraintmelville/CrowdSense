@@ -77,12 +77,10 @@ st.markdown(
     This was an ambitious project and the result is a proof-of-concept. The model itself
     performs quite well considering the fairly amount of data used to train it 
     (see performance page). The app only includes a demo, rather than the ability to upload
-    full matches and export candidate highlights. There is a full and fast version, both
-    using a ~25 min clip from a match not used in training or testing. The full version takes 
-    the audio file, extracts the features and feeds them through the model. The fast
-    version skips the first, simply feeding pre-saved features through the model. Each version 
-    outputs a table specifying candidate highlights, which can be streamed from an unlisted
-    YouTube video. See underneath for more detail on the pipeline.
+    full matches and export candidate highlights. The demo has a full and fast mode using
+    the same prepared match audio. Full mode extracts features from the WAV before scoring;
+    Quick mode scores the saved features. Both output candidate highlights that can be
+    reviewed against an unlisted YouTube video. See underneath for more detail on the pipeline.
     """
 )
 

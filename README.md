@@ -2,7 +2,7 @@
 
 CrowdSense is an audio-driven futsal highlight detection project that helps reviewers find likely goal moments in long match footage using crowd noise and match audio cues.
 
-The app combines time-range extraction from match video, YAMNet audio features, PCA dimensionality reduction, XGBoost classification, and candidate-window merging.
+The app combines YAMNet audio features, PCA dimensionality reduction, XGBoost classification, and candidate-window merging.
 
 ## Live demo
 

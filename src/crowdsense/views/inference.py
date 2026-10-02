@@ -5,7 +5,7 @@ import streamlit as st
 from src.crowdsense.nav import page_header, section
 
 P = "inference"
-page_header(P, "Inference & Demo Flow", "How a selected match segment becomes timestamped highlight candidates.")
+page_header(P, "Inference & Demo Flow", "How selected match audio becomes timestamped highlight candidates.")
 
 with section(P, "segment", "1 · Choose match audio"):
     st.markdown(
