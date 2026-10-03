@@ -8,6 +8,7 @@ PCA-reduced embedding
 """
 
 from pathlib import Path
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ from sklearn.model_selection import GroupKFold
 from xgboost import XGBClassifier
 
 from constants import (
-    MODEL_N_JOBS, SCORE_INDICES, TEST_MATCH_IDS,
+    CURVE_N_THRESHOLDS, MODEL_N_JOBS, SCORE_INDICES, TEST_MATCH_IDS,
     YAMNET_STRIDE_SEC, YAMNET_WINDOW_SEC,
 )
 
@@ -105,7 +106,7 @@ def recall_budget_curve(
     raw_durations: dict[int, float],
     lookback: float = 0.0,
     postroll: float = 0.0,
-    n_thresholds: int = 100,
+    n_thresholds: int = CURVE_N_THRESHOLDS,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Sweep decision thresholds and return (budgets, recalls, thresholds),
     sorted by ascending budget, covering the full [0, 1] budget range.
@@ -131,7 +132,8 @@ def recall_budget_curve(
     if not raw_seconds:
         raise ValueError("raw_durations has no positive footage seconds for these matches")
 
-    quantile_grid = np.quantile(probabilities, np.linspace(0.0, 1.0, n_thresholds))
+    levels = 1.0 - np.geomspace(1e-4, 0.5, n_thresholds)
+    quantile_grid = np.quantile(probabilities, levels)
     thresholds = np.unique(np.concatenate(([probabilities.max() + 1e-6], quantile_grid)))[::-1]
 
     budgets, recalls = [], []
@@ -186,6 +188,39 @@ def curve_auc(budgets: np.ndarray, recalls: np.ndarray) -> float:
     """Trapezoidal area under a recall-vs-budget curve."""
     order = np.argsort(budgets)
     return float(np.trapezoid(np.asarray(recalls)[order], np.asarray(budgets)[order]))
+
+
+def curve_partial_auc(
+    budgets: np.ndarray,
+    recalls: np.ndarray,
+    lo: float,
+    hi: float,
+    n: int = 101,
+) -> float:
+    """Return mean interpolated recall over the requested budget interval."""
+    order = np.argsort(budgets)
+    sorted_budgets = np.asarray(budgets)[order]
+    sorted_recalls = np.asarray(recalls)[order]
+    if sorted_budgets.size == 0:
+        raise ValueError("At least one curve point is required")
+    if hi <= lo:
+        raise ValueError(f"Expected hi > lo, got lo={lo} and hi={hi}")
+    if sorted_budgets.max() < hi:
+        warnings.warn(
+            f"Recall-budget curve ends at budget {sorted_budgets.max():.3f}, below the requested upper bound {hi:.3f}; "
+            "np.interp will extend the final recall value across the remainder of the band.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    grid = np.linspace(lo, hi, n)
+    interpolated = np.interp(grid, sorted_budgets, sorted_recalls)
+    return float(np.trapezoid(interpolated, grid) / (hi - lo))
+
+
+def count_points_in_band(budgets: np.ndarray, lo: float, hi: float) -> int:
+    """Count curve points whose budget lies in the inclusive [lo, hi] band."""
+    values = np.asarray(budgets)
+    return int(np.count_nonzero((values >= lo) & (values <= hi)))
 
 
 def recall_at_budget(budgets: np.ndarray, recalls: np.ndarray, budget: float) -> float:

@@ -1,11 +1,9 @@
 """Tune the audio classifier with grouped cross-validation.
 
 TEST_MATCH_IDS (modelling/functions.py) are reserved for eval_model.py and
-are never used here. Hyperparameters are ranked by the area under each
-candidate's pooled out-of-fold recall-vs-budget curve (see
-modelling/functions.py: recall_budget_curve / curve_auc) rather than a
-single threshold-constrained score, so the ranking isn't sensitive to one
-operating point.
+are never used here. Hyperparameters are ranked by partial recall-budget
+AUC (band 25-40%) for each candidate's pooled out-of-fold curve (see
+modelling/functions.py: recall_budget_curve / curve_partial_auc).
 
 Candidate-window generation (lookback/postroll/merge_gap) is now part of the
 search instead of being fixed CLI values. These three don't require
@@ -14,7 +12,7 @@ probabilities get turned into candidate windows -- so for every sampled set
 of model hyperparameters we fit ONCE (expensive) and then sweep the full
 CANDIDATE_PARAM_GRID (constants.py) against that same pooled set of
 probabilities (cheap, no refitting), keeping whichever window combination
-gives the best recall-budget AUC for that model. The winning combo is
+gives the best partial recall-budget AUC (band 25-40%) for that model. The winning combo is
 written to the results CSV alongside the winning model params, and
 save_final_model.py / eval_model.py load it from there by default.
 
@@ -34,13 +32,14 @@ import pandas as pd
 from sklearn.model_selection import ParameterSampler
 
 from constants import (
-    CANDIDATE_PARAM_GRID, CV_FOLDS, FEATURES_DIR, LABELS_PATH, MATCHES_PATH,
+    BUDGET_BAND, CANDIDATE_PARAM_GRID, CV_FOLDS, FEATURES_DIR, LABELS_PATH, MATCHES_PATH,
     MODEL_RESULTS_PATH, MODEL_PARAM_DISTRIBUTIONS, N_ITER, RANDOM_STATE,
 )
 
 from modelling.functions import (
-    TEST_MATCH_IDS, build_targets, curve_auc, load_features, load_labels,
-    load_raw_durations, pooled_oof_predict, recall_budget_curve,
+    TEST_MATCH_IDS, build_targets, count_points_in_band, curve_auc,
+    curve_partial_auc, load_features, load_labels, load_raw_durations,
+    pooled_oof_predict, recall_budget_curve,
     required_feature_columns,
 )
 
@@ -100,14 +99,14 @@ def best_candidate_window(
     combos: list[dict[str, float]],
 ) -> tuple[dict[str, float], float]:
     """Sweep every candidate-window combo against one set of already-pooled
-    probabilities -- no refitting -- and return the best (combo, pooled_auc)."""
+    probabilities -- no refitting -- and return the best (combo, partial recall-budget AUC (band 25-40%))."""
     best_combo, best_auc = combos[0], -np.inf
     for combo in combos:
         budgets, recalls, _ = recall_budget_curve(
             groups, starts, probabilities, labels, combo["merge_gap"],
             raw_durations=raw_durations, lookback=combo["lookback"], postroll=combo["postroll"],
         )
-        auc = curve_auc(budgets, recalls)
+        auc = curve_partial_auc(budgets, recalls, *BUDGET_BAND)
         if auc > best_auc:
             best_combo, best_auc = combo, auc
     return best_combo, best_auc
@@ -121,10 +120,11 @@ def score_candidate(
 ) -> dict:
     """Fit this candidate's params across GroupKFold folds ONCE (expensive),
     pool the OOF probabilities, then pick whichever lookback/postroll/
-    merge_gap combination gives the best pooled recall-budget AUC (cheap --
+    merge_gap combination gives the best pooled partial recall-budget AUC
+    (band 25-40%; cheap --
     reuses the same pooled probabilities, no refitting). std_test_score is
     then computed per-fold using that winning combo, for comparability with
-    the pooled score."""
+    the pooled partial recall-budget AUC (band 25-40%)."""
     pooled_probabilities, held_positions = pooled_oof_predict(
         data.feature_matrix, data.targets, data.groups, sampled_params, args.random_state, args.cv,
     )
@@ -133,6 +133,13 @@ def score_candidate(
         data.groups, data.starts, pooled_probabilities, data.labels, data.raw_durations, candidate_combos,
     )
 
+    best_budgets, best_recalls, _ = recall_budget_curve(
+        data.groups, data.starts, pooled_probabilities, data.labels, best_combo["merge_gap"],
+        raw_durations=data.raw_durations, lookback=best_combo["lookback"], postroll=best_combo["postroll"],
+    )
+    full_auc = curve_auc(best_budgets, best_recalls)
+    band_points = count_points_in_band(best_budgets, *BUDGET_BAND)
+
     fold_aucs = []
     for held_pos in held_positions:
         budgets, recalls, _ = recall_budget_curve(
@@ -140,7 +147,7 @@ def score_candidate(
             data.labels, best_combo["merge_gap"], raw_durations=data.raw_durations,
             lookback=best_combo["lookback"], postroll=best_combo["postroll"],
         )
-        fold_aucs.append(curve_auc(budgets, recalls))
+        fold_aucs.append(curve_partial_auc(budgets, recalls, *BUDGET_BAND))
 
     return {
         "params": sampled_params,
@@ -149,6 +156,8 @@ def score_candidate(
         "merge_gap": best_combo["merge_gap"],
         "mean_test_score": pooled_auc,
         "std_test_score": float(np.std(fold_aucs)),
+        "full_auc": full_auc,
+        "_band_points": band_points,
     }
 
 
@@ -163,9 +172,15 @@ def run_search(
         result = score_candidate(sampled_params, data, args, candidate_combos)
         result["candidate_number"] = candidate_number
         results_rows.append(result)
-        print(f"Candidate {candidate_number}/{args.n_iter}: recall-budget AUC={result['mean_test_score']:.3f} "
+        print(f"Candidate {candidate_number}/{args.n_iter}: partial recall-budget AUC (band 25-40%)="
+              f"{result['mean_test_score']:.3f} "
               f"(lookback={result['lookback']:.0f}s postroll={result['postroll']:.0f}s "
               f"merge_gap={result['merge_gap']:.0f}s)")
+        if candidate_number == 1:
+            band_points = result["_band_points"]
+            print(f"Best combo curve points in budget band 25-40%: {band_points}")
+            if band_points < 15:
+                print("[WARNING] Fewer than 15 curve points fall in the budget band; increase CURVE_N_THRESHOLDS.")
 
     results = pd.DataFrame(results_rows).sort_values(
         ["mean_test_score", "candidate_number"], ascending=[False, True]
@@ -201,8 +216,8 @@ def main() -> None:
     best_row = results.iloc[0]
     args.results.parent.mkdir(parents=True, exist_ok=True)
     results[["rank_test_score", "mean_test_score", "std_test_score",
-             "lookback", "postroll", "merge_gap", "params"]].to_csv(args.results, index=False)
-    print(f"Best pooled recall-budget AUC: {best_row['mean_test_score']:.3f}")
+             "lookback", "postroll", "merge_gap", "params", "full_auc"]].to_csv(args.results, index=False)
+    print(f"Best pooled partial recall-budget AUC (band 25-40%): {best_row['mean_test_score']:.3f}")
     print(f"Best candidate window: lookback={best_row['lookback']:.0f}s postroll={best_row['postroll']:.0f}s "
           f"merge_gap={best_row['merge_gap']:.0f}s")
     print(f"Best parameters: {json.dumps(best_row['params'], sort_keys=True)}")

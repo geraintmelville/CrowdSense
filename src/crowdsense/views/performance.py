@@ -15,8 +15,9 @@ with section(P, "metrics", "1 · Recall vs budget"):
           candidate window (scored against original editor clip bounds). This measures clip
           coverage, not whether a detected event is a goal or classification accuracy.
         - **Budget** — total merged candidate seconds ÷ total raw match seconds.
-        - **Curve AUC** — area under recall vs budget, swept over thresholds. Used to rank
-          tuning candidates; `eval_model.py` also reports recall at fixed budget checkpoints.
+        - **Partial recall-budget AUC (25-40%)** — mean recall over the deployment budget
+          band, swept over thresholds. This is the metric used to rank tuning candidates and
+          reported by `eval_model.py` on held-out matches.
         """
     )
     st.caption(

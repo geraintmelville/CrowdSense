@@ -1,8 +1,8 @@
 """Evaluate test-set probabilities written by train_predict.py.
 
 Reads the per-window probability CSV for TEST_MATCH_IDS (modelling/functions.py),
-sweeps thresholds, and reports a recall-vs-budget curve (recall at a handful
-of budget checkpoints, plus the full-range AUC).
+sweeps thresholds, and reports recall at a handful of budget checkpoints plus
+partial recall-budget AUC (band 25-40%), matching the tuning ranking metric.
 
 There is no tiering in this project -- the old --tier-map breakdown is
 removed; this reports the pooled curve over the full test set only.
@@ -28,12 +28,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from constants import (
-    BUDGET_CHECKPOINTS, LABELS_PATH, MATCHES_PATH, MODEL_RESULTS_PATH,
+    BUDGET_BAND, BUDGET_CHECKPOINTS, LABELS_PATH, MATCHES_PATH, MODEL_RESULTS_PATH,
     RECALL_BUDGET_PLOT_PATH, TEST_PROBABILITIES_PATH,
 )
 
 from modelling.functions import (
-    TEST_MATCH_IDS, curve_auc, load_best_candidate_config, load_labels,
+    TEST_MATCH_IDS, curve_partial_auc, load_best_candidate_config, load_labels,
     load_raw_durations, recall_at_budget, recall_budget_curve,
 )
 
@@ -47,7 +47,7 @@ def report_curve(
     postroll: float,
     plot_output: Path | None = None,
 ) -> None:
-    """Print the recall-vs-budget curve (at a few checkpoints) and its AUC."""
+    """Print recall checkpoints and partial recall-budget AUC (band 25-40%)."""
     groups = probabilities_df["match_id"].to_numpy()
     starts = probabilities_df["start_sec"].to_numpy()
     probabilities = probabilities_df["probability"].to_numpy()
@@ -59,12 +59,12 @@ def report_curve(
         groups, starts, probabilities, labels, merge_gap,
         raw_durations=raw_durations, lookback=lookback, postroll=postroll,
     )
-    auc = curve_auc(budgets, recalls)
+    partial_auc = curve_partial_auc(budgets, recalls, *BUDGET_BAND)
     checkpoints = ", ".join(
         f"{budget:.0%}\u2192{recall_at_budget(budgets, recalls, budget):.1%}" for budget in BUDGET_CHECKPOINTS
     )
     n_matches = probabilities_df["match_id"].nunique()
-    print(f"  [{name}] n_matches={n_matches}  AUC={auc:.3f}")
+    print(f"  [{name}] n_matches={n_matches}  partial recall-budget AUC (band 25-40%)={partial_auc:.3f}")
     print(f"      recall @ budget: {checkpoints}")
 
     if plot_output is not None:
@@ -72,6 +72,7 @@ def report_curve(
         figure, axis = plt.subplots(figsize=(8, 5))
         axis.plot(budgets, recalls, color="#1f77b4", linewidth=2.5)
         axis.fill_between(budgets, recalls, alpha=0.12, color="#1f77b4")
+        axis.axvspan(*BUDGET_BAND, color="#ffbf00", alpha=0.18, label="Tuning band (25-40%)")
         axis.set(
             title="Recall-budget curve (held-out test set)",
             xlabel="Candidate footage budget",
@@ -80,6 +81,7 @@ def report_curve(
             ylim=(0, 1),
         )
         axis.grid(alpha=0.25)
+        axis.legend()
         figure.tight_layout()
         figure.savefig(plot_output, dpi=160)
         plt.close(figure)

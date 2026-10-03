@@ -4,6 +4,7 @@ import streamlit as st
 
 from constants import RESULTS
 from src.crowdsense.nav import render_map
+from crowdsense.pipeline_map import render_pipeline_map
 
 st.session_state.pop("focus", None)
 
@@ -98,5 +99,7 @@ st.caption(
 
 st.caption("External sources checked 3 October 2026; linked product features and participation estimates can change.")
 
+
 st.header("Pipeline Map")
+render_pipeline_map()
 render_map()

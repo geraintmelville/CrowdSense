@@ -21,9 +21,8 @@ with section(P, "tuning", "2 · Hyperparameter tuning 🔒 training matches only
     st.markdown(
         """
         `tune_model.py` runs a randomized search over XGBoost parameters (`binary:logistic`,
-        `aucpr` eval metric). Candidates are ranked by the **area under the pooled out-of-fold
-        recall-vs-budget curve**, swept across thresholds, rather than by a single operating
-        point, so the ranking is not sensitive to one threshold choice.
+        `aucpr` eval metric). Candidates are ranked by **partial recall-budget AUC (25-40%)**
+        on the pooled out-of-fold curve, swept across thresholds.
         """
     )
 
@@ -51,9 +50,9 @@ with section(P, "final", "5 · Final model & deployment threshold 🔒 training 
     st.markdown(
         """
         `save_final_model.py` builds pooled grouped OOF predictions across the training matches
-        and picks the operating point whose budget is closest to the configured limit (30% by
-        default), tie-breaking on recall. This closest-point target can land slightly above or
-        below 30%; test matches are excluded from threshold selection. The model is then refit
+        and picks the operating point whose budget is closest to the configured target (33%
+        placeholder by default), tie-breaking on recall. This closest-point target can land
+        slightly above or below the target; test matches are excluded from threshold selection. The model is then refit
         on all non-test training matches and
         saved as `model.ubj` plus `model.json` (threshold, feature columns, YAMNet score
         indices, window/stride, PCA components + mean, and the candidate-window settings).

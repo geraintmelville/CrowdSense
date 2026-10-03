@@ -15,11 +15,9 @@ alongside the winning model hyperparameters (same --results file). Pass
 PCA: this now loads the PCA transform extract_features.py already fit and
 saved to --pca-transform (pca_transform.npz).
 
-Threshold selection: this selects the highest-recall operating point whose
-measured candidate budget is at most --budget. Because thresholds are swept
-over observed probability quantiles, the achieved budget may be below the
-requested budget when no exact operating point exists. Both OOF threshold
-selection and final fitting exclude TEST_MATCH_IDS.
+Threshold selection: this selects the operating point whose measured
+candidate budget is closest to --budget, breaking ties on recall. Both OOF
+threshold selection and final fitting exclude TEST_MATCH_IDS.
 """
 
 import argparse
@@ -28,7 +26,7 @@ from pathlib import Path
 import numpy as np
 
 from constants import (
-    DEPLOYMENT_BUDGET, FEATURES_DIR, LABELS_PATH, MATCHES_PATH,
+    DEPLOYMENT_BUDGET, FEATURES_DIR, FINAL_CURVE_N_THRESHOLDS, LABELS_PATH, MATCHES_PATH,
     MODEL_PATH, MODEL_RESULTS_PATH, PCA_DIR, RANDOM_STATE,
 )
 
@@ -58,7 +56,7 @@ def select_threshold(
     budgets, recalls, thresholds = recall_budget_curve(
         groups, starts, probabilities, labels, merge_gap,
         raw_durations=raw_durations, lookback=lookback, postroll=postroll,
-        n_thresholds=5000,
+        n_thresholds=FINAL_CURVE_N_THRESHOLDS,
     )
     # Exclude the budget=0 anchor: it must never become a deployable threshold.
     eligible = np.flatnonzero(budgets > 1e-12)
@@ -82,7 +80,7 @@ def main() -> None:
     parser.add_argument("--results", type=Path, default=MODEL_RESULTS_PATH,
                         help="Tuning results written by tune_model.py.")
     parser.add_argument("--budget", type=float, default=DEPLOYMENT_BUDGET,
-                        help="Maximum candidate-footage budget as a fraction of raw footage (default: 0.30).")
+                        help="Target candidate-footage budget as a fraction of raw footage (default: 0.33).")
     parser.add_argument("--lookback", type=float, default=None,
                         help="Override the tuned lookback (seconds); default: whatever tune_model.py's "
                              "grid search selected alongside the winning model hyperparameters.")
@@ -144,7 +142,7 @@ def main() -> None:
         clip_labels, raw_durations, merge_gap, lookback, postroll, args.budget,
     )
     print(f"Decision threshold: {threshold:.4f} (recall={recall:.1%}, budget={budget:.1%}; "
-          f"requested max={args.budget:.1%} on training data; "
+          f"target={args.budget:.1%} on training data; "
           f"test matches excluded: {sorted(TEST_MATCH_IDS)})")
 
     model.fit(feature_matrix[train_idx], targets[train_idx])
