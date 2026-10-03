@@ -77,7 +77,7 @@ DEPLOYMENT_BUDGET = 0.30
 
 # Reproducible model-search defaults.
 RANDOM_STATE = 42
-N_ITER = 60
+N_ITER = 100
 CV_FOLDS = 4
 MODEL_N_JOBS = 4
 MODEL_PARAM_DISTRIBUTIONS = {
@@ -93,9 +93,9 @@ MODEL_PARAM_DISTRIBUTIONS = {
     "reg_lambda": [5, 10, 20],
 }
 CANDIDATE_PARAM_GRID = {
-    "lookback": [10.0, 20.0, 30.0, 45.0],
-    "postroll": [5.0, 10.0, 15.0],
-    "merge_gap": [1.0, 5.0, 10.0],
+    "lookback": [10.0, 15.0, 20.0, 30.0],
+    "postroll": [0.0, 1.0, 3.0, 5.0, 10.0],
+    "merge_gap": [5.0, 10.0, 15.0],
 }
 RESULTS = {
     "recall": 0.79,

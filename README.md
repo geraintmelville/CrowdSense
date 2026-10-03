@@ -10,7 +10,7 @@ The app combines YAMNet audio features, PCA dimensionality reduction, XGBoost cl
 2. Run `streamlit run app.py` from the project root.
 3. On the dashboard, choose Quick demo to score the prepared feature file or Full demo to select the matching WAV and extract features from the audio before scoring.
 
-Set `CROWDSENSE_DEMO_YOUTUBE_URL` in the environment to the YouTube URL for the selected match. This enables timestamped links and in-page playback. Candidate times are relative to the selected match audio, which should start at the beginning of that video.
+The dashboard uses [this demo match](https://youtu.be/W8DhX4CIdKM) for timestamped links and in-page playback by default. To use a different match, set `CROWDSENSE_DEMO_YOUTUBE_URL` in the environment. Candidate times are relative to the selected match audio, which should start at the beginning of that video.
 
 To prepare a manually trimmed demo match and its highlight ZIP, place the MP4 in
 `demo/raw/video/` and the matching ZIP in `demo/raw/clips/`, then run

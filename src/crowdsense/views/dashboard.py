@@ -8,9 +8,11 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import pandas as pd
 import streamlit as st
 
-from constants import DEMO_FEATURES_DIR, DEMO_RAW_AUDIO_DIR, MODEL_PATH
+from constants import DEMO_DIR, DEMO_FEATURES_DIR, DEMO_RAW_AUDIO_DIR, MODEL_PATH
 from modelling.inference import format_timestamp, score_match, score_precomputed_features
 from modelling.model_artifact import load_model_artifact
+
+DEFAULT_DEMO_YOUTUBE_URL = "https://youtu.be/W8DhX4CIdKM"
 
 
 @st.cache_resource
@@ -25,8 +27,52 @@ def _youtube_timestamp_url(video_url: str, start_seconds: float) -> str:
     return urlunsplit(parts._replace(query=urlencode(query)))
 
 
+def _format_mmss(seconds: float) -> str:
+    minutes, secs = divmod(max(0, int(seconds)), 60)
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def _goal_intervals(result_key: str) -> list[tuple[float, float]]:
+    """Load editor-labelled goal spans for the match currently being shown."""
+    clips_path = DEMO_DIR / "clips.csv"
+    matches_path = DEMO_DIR / "matches.csv"
+    if not clips_path.exists() or not matches_path.exists():
+        return []
+
+    match_name = Path(result_key.split(":", 1)[1]).stem
+    matches = pd.read_csv(matches_path)
+    matched = matches[matches["raw_filename"].map(lambda name: Path(name).stem) == match_name]
+    if matched.empty:
+        return []
+    match_id = matched.iloc[0]["match_id"]
+    labels = pd.read_csv(clips_path)
+    labels = labels[(labels["match_id"] == match_id) & (labels["description"].str.casefold() == "goal")]
+    intervals = []
+    for label in labels.itertuples(index=False):
+        start = sum(int(part) * factor for part, factor in zip(label.timestamp_formatted.split(":"), (3600, 60, 1)))
+        intervals.append((float(start), float(start) + float(label.length_sec)))
+    return intervals
+
+
 def _render_results(result: dict, youtube_url: str) -> None:
     clips = result["clips"]
+    goals = _goal_intervals(result["result_key"])
+    hits_by_candidate = []
+    hit_goals = set()
+    for _, candidate in clips.iterrows():
+        hits = [
+            goal_index for goal_index, (goal_start, goal_end) in enumerate(goals)
+            if candidate["start_sec"] <= goal_start and goal_end <= candidate["end_sec"]
+        ]
+        hits_by_candidate.append(hits)
+        hit_goals.update(hits)
+
+    candidate_seconds = float(clips["length_sec"].sum()) if not clips.empty else 0.0
+    budget_percent = candidate_seconds / result["duration"] if result["duration"] else 0.0
+    cols = st.columns(2)
+    cols[0].metric("Confirmed budget", f"{_format_mmss(candidate_seconds)} ({budget_percent:.1%})")
+    cols[1].metric("Recall", f"{len(hit_goals)} / {len(goals)} goals" if goals else "Unavailable")
+
     st.success(
         f"Scored {result['n_windows']} windows across "
         f"{format_timestamp(result['duration'])} of footage."
@@ -35,9 +81,15 @@ def _render_results(result: dict, youtube_url: str) -> None:
         st.warning("No candidate windows cleared the threshold.")
         return
 
-    table = clips[["start", "end", "length_sec"]].rename(
-        columns={"start": "Start", "end": "End", "length_sec": "Length (s)"}
-    )
+    table = pd.DataFrame({
+        "Clip": range(1, len(clips) + 1),
+        "Start–End": [
+            f"{_format_mmss(row.start_sec)}-{_format_mmss(row.end_sec)}"
+            for row in clips.itertuples()
+        ],
+        "Duration": clips["length_sec"].map(_format_mmss),
+        "Goal/No Goal": ["Goal" if hits else "No Goal" for hits in hits_by_candidate],
+    })
     if youtube_url:
         table["YouTube"] = clips["start_sec"].map(
             lambda start: _youtube_timestamp_url(youtube_url, start)
@@ -135,7 +187,7 @@ def render_full_demo(bundle: dict, youtube_url: str) -> None:
 def render_demo(bundle: dict) -> None:
     st.title("Audio Highlight Candidate Finder")
     mode = st.radio("Demo mode", ["Quick demo", "Full demo"], horizontal=True)
-    youtube_url = os.environ.get("CROWDSENSE_DEMO_YOUTUBE_URL", "").strip()
+    youtube_url = os.environ.get("CROWDSENSE_DEMO_YOUTUBE_URL", DEFAULT_DEMO_YOUTUBE_URL).strip()
     if mode == "Quick demo":
         render_quick_demo(bundle, youtube_url)
     else:
