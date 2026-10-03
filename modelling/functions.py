@@ -35,21 +35,21 @@ def load_labels(
     labels_csv: Path,
     start_column: str = "label_start_sec",
     end_column: str = "label_end_sec",
-) -> dict[int, list[tuple[float, float, str]]]:
+) -> dict[int, list[tuple[float, float]]]:
     """Load label intervals from the labels CSV produced by extract_labels.py.
 
     The refined interval columns are the default because they define training
     targets. Evaluation can request the original editor clip bounds explicitly.
     """
     rows = pd.read_csv(labels_csv)
-    required = {"match_id", "description", start_column, end_column}
+    required = {"match_id", start_column, end_column}
     missing = required - set(rows.columns)
     if missing:
         raise ValueError(f"Missing required label columns in {labels_csv}: {sorted(missing)}")
-    labels: dict[int, list[tuple[float, float, str]]] = {}
+    labels: dict[int, list[tuple[float, float]]] = {}
     for row in rows.itertuples(index=False):
         labels.setdefault(int(row.match_id), []).append(
-            (float(getattr(row, start_column)), float(getattr(row, end_column)), str(row.description))
+            (float(getattr(row, start_column)), float(getattr(row, end_column)))
         )
     return labels
 
@@ -65,8 +65,8 @@ def load_raw_durations(matches_csv: Path) -> dict[int, float]:
 
 # --- Intervals & coverage -------------------------------------------------------
 
-def interval_overlap(start: float, end: float, labels: list[tuple[float, float, str]]) -> bool:
-    return any(start < label_end and end > label_start for label_start, label_end, _ in labels)
+def interval_overlap(start: float, end: float, labels: list[tuple[float, float]]) -> bool:
+    return any(start < label_end and end > label_start for label_start, label_end in labels)
 
 
 def merge_intervals(intervals: list[tuple[float, float]], merge_gap: float) -> list[tuple[float, float]]:
@@ -87,10 +87,10 @@ def _fully_contained(interval: tuple[float, float], candidates: list[tuple[float
 
 
 def coverage_metrics(
-    labels: list[tuple[float, float, str]],
+    labels: list[tuple[float, float]],
     candidates: list[tuple[float, float]],
 ) -> tuple[int, int, float]:
-    found = sum(_fully_contained((start, end), candidates) for start, end, _ in labels)
+    found = sum(_fully_contained((start, end), candidates) for start, end in labels)
     candidate_seconds = sum(end - start for start, end in candidates)
     return found, len(labels), candidate_seconds
 
@@ -101,7 +101,7 @@ def recall_budget_curve(
     groups: np.ndarray,
     starts: np.ndarray,
     probabilities: np.ndarray,
-    labels: dict[int, list[tuple[float, float, str]]],
+    labels: dict[int, list[tuple[float, float]]],
     merge_gap: float,
     raw_durations: dict[int, float],
     lookback: float = 0.0,
@@ -113,9 +113,8 @@ def recall_budget_curve(
 
     budget = total merged candidate seconds / total raw match seconds.
     recall = fraction of labels fully contained by the merged candidate
-    windows at that threshold. No label-description filtering happens here
-    any more -- labels is already scoped to the single target label by
-    load_labels()/extract_labels.py.
+    windows at that threshold. Labels are already scoped to the single target
+    signal by load_labels()/extract_labels.py.
     """
     if not raw_durations:
         raise ValueError("raw_durations is required to compute footage budget")
@@ -124,8 +123,8 @@ def recall_budget_curve(
     for match_id in np.unique(groups):
         mask = groups == match_id
         match_labels = labels.get(int(match_id), [])
-        label_starts = np.fromiter((start for start, _, _ in match_labels), dtype=float)
-        label_ends = np.fromiter((end for _, end, _ in match_labels), dtype=float)
+        label_starts = np.fromiter((start for start, _ in match_labels), dtype=float)
+        label_ends = np.fromiter((end for _, end in match_labels), dtype=float)
         by_match[int(match_id)] = (starts[mask], probabilities[mask], label_starts, label_ends)
 
     raw_seconds = sum(raw_durations.get(match_id, 0.0) for match_id in by_match)
@@ -320,7 +319,7 @@ def feature_columns(df: pd.DataFrame) -> list[str]:
     return selected_score_columns + pca_columns
 
 
-def build_targets(df: pd.DataFrame, labels: dict[int, list[tuple[float, float, str]]]) -> np.ndarray:
+def build_targets(df: pd.DataFrame, labels: dict[int, list[tuple[float, float]]]) -> np.ndarray:
     targets = np.zeros(len(df), dtype=int)
     for match_id, group in df.groupby("match_id"):
         match_labels = labels.get(int(match_id), [])

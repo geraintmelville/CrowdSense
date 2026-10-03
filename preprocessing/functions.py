@@ -49,7 +49,6 @@ def create_schema(conn: sqlite3.Connection) -> None:
             match_id INTEGER NOT NULL,
             clip_number INTEGER NOT NULL,
             timestamp_formatted TEXT NOT NULL,
-            description TEXT NOT NULL,
             filename TEXT NOT NULL,
             length_sec REAL NOT NULL,
             FOREIGN KEY (match_id) REFERENCES matches(match_id) ON DELETE CASCADE,
@@ -175,7 +174,6 @@ def extract_clip_data(zip_path: Path) -> dict[int, dict[str, Any]]:
                 continue
             clips[clip_num] = {
                 "timestamp": f"{timestamp[:2]}:{timestamp[2:4]}:{timestamp[4:6]}",
-                "description": description,
                 "filename": filename,
                 "duration": get_zip_member_duration(archive, file_info.filename),
             }

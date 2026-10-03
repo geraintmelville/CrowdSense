@@ -115,12 +115,11 @@ def test_process_all_exports_matches_and_clips_from_database(tmp_path):
                 match_id INTEGER,
                 clip_number INTEGER,
                 timestamp_formatted TEXT,
-                description TEXT,
                 filename TEXT,
                 length_sec REAL
             );
             INSERT INTO matches VALUES (7, 'match.mp4', 'highlights.zip', '2026-04-19', 123.5);
-            INSERT INTO clips VALUES (7, 2, '00:01:00', 'Goal', '02_goal.mp4', 12.0);
+            INSERT INTO clips VALUES (7, 2, '00:01:00', '02_goal.mp4', 12.0);
             """
         )
 
@@ -146,7 +145,6 @@ def test_process_all_exports_matches_and_clips_from_database(tmp_path):
         "match_id": "7",
         "clip_number": "2",
         "timestamp_formatted": "00:01:00",
-        "description": "Goal",
         "filename": "02_goal.mp4",
         "length_sec": "12.0",
     }]

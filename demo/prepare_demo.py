@@ -32,6 +32,9 @@ DEMO_START_OFFSET_SEC = 18 * 60 + 4
 
 def _renormalize_demo_clip_timestamps(clips_csv_path: Path) -> None:
     """Rebase full-match clip timestamps to the demo video, which starts at 18:04."""
+    if not clips_csv_path.exists():
+        return
+
     clips = pd.read_csv(clips_csv_path)
 
     def to_seconds(timestamp: str) -> int:

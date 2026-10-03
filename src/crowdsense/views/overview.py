@@ -4,7 +4,7 @@ import streamlit as st
 
 from constants import RESULTS
 from src.crowdsense.nav import render_map
-from crowdsense.pipeline_map import render_pipeline_map
+from src.crowdsense.pipeline_map import render_pipeline_map
 
 st.session_state.pop("focus", None)
 

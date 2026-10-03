@@ -9,8 +9,9 @@ import streamlit as st
 PAGES = {
     "welcome": "src/crowdsense/views/overview.py",
     "preprocessing": "src/crowdsense/views/preprocessing.py",
+    "metrics": "src/crowdsense/views/metrics.py",
     "modelling": "src/crowdsense/views/modelling.py",
-    "performance": "src/crowdsense/views/performance.py",
+    "results": "src/crowdsense/views/results.py",
     "inference": "src/crowdsense/views/inference.py",
 }
 
@@ -23,20 +24,22 @@ LANES = [
         ("pca", "PCA (16-dim)", True),
         ("labels", "Label refinement", False),
     ]),
-    ("modelling", "2 · Modelling", [
+    ("metrics", "2 · Metrics", [
+        ("metrics", "Recall vs budget", False),
+    ]),
+    ("modelling", "3 · Modelling", [
         ("targets", "Targets & grouped CV", True),
         ("tuning", "Hyperparameter tuning", True),
         ("window_grid", "Candidate-window grid", True),
         ("train_score", "Train & test scoring", False),
         ("final", "Final model & threshold", True),
     ]),
-    ("performance", "3 · Performance", [
-        ("metrics", "Recall vs budget", False),
+    ("results", "4 · Results", [
         ("results", "Results", False),
         ("limits", "Limitations", False),
         ("next", "Planned improvements", False),
     ]),
-    ("inference", "4 · Inference & demo", [
+    ("inference", "5 · Inference & demo", [
         ("segment", "Segment creation", False),
         ("scoring", "Scoring", False),
         ("merging", "Candidate merging", False),

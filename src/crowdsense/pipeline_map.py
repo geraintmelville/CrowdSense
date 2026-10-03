@@ -57,7 +57,7 @@ NODES = [
         summary="Full-length futsal match recordings (roughly 1.5 to 2 hours each) plus, for each "
                 "match, a ZIP of highlight clips that were cut by hand.",
         where=["data/raw/video/", "data/raw/clips/"],
-        notes=["Only clips whose filename description is 'goal' are kept.",
+        notes=["Only goal clips are kept.",
                "A highlight clip is the editor's cut, not the acoustic event, so it includes lead-in "
                "and sometimes the restart whistle."],
     ),
@@ -72,8 +72,8 @@ NODES = [
     dict(
         id="build_clip_database", kind="script", col=2, row=1,
         title="build_clip_database", sub="Pairs matches and clips",
-        summary="Pairs each raw match with its clip ZIP, parses clip number, timestamp and description "
-                "from the filenames, probes each clip's duration, and writes the matches and clips tables.",
+        summary="Pairs each raw match with its clip ZIP, parses clip number and timestamp from the "
+                "filenames, probes each clip's duration, and writes the matches and clips tables.",
         where=["preprocessing/build_clip_database.py", "preprocessing/functions.py"],
         notes=["Matching uses normalised opposition name + date, and flags unmatched or ambiguous ZIPs.",
                "audio_length_sec is read from the match's WAV, so it is only filled in if extract_audio "
@@ -91,7 +91,7 @@ NODES = [
         title="Clip database", sub="clips_data.db + CSVs",
         summary="SQLite database with a matches table (match_id, raw_filename, zip_filename, match_date, "
                 "audio_length_sec) and a clips table (match_id, clip_number, timestamp_formatted, "
-                "description, filename, length_sec). Both are also exported as CSV.",
+                "filename, length_sec). Both are also exported as CSV.",
         where=["data/metadata/clips_data.db", "data/metadata/matches.csv", "data/metadata/clips.csv"],
         notes=["matches.csv supplies the raw footage length used for the budget calculation."],
     ),

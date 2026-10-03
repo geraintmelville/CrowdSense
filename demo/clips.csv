@@ -1,7 +1,7 @@
-clip_id,match_id,clip_number,timestamp_formatted,description,filename,length_sec
-1,1,9,00:18:14,Goal,09 001814_-_Goal.mp4,11.0
-2,1,12,00:21:02,Goal,12 002102_-_Goal.mp4,19.01
-3,1,16,00:30:38,Goal,16 003038_-_Goal.mp4,8.02
-4,1,19,00:35:00,Goal,19 003500_-_Goal.mp4,9.01
-5,1,22,00:41:13,Goal,22 004113_-_Goal.mp4,9.01
-6,1,25,00:43:16,Goal,25 004316_-_Goal.mp4,10.02
+clip_id,match_id,clip_number,timestamp_formatted,filename,length_sec
+1,1,9,00:18:14,09 001814_-_Goal.mp4,11.0
+2,1,12,00:21:02,12 002102_-_Goal.mp4,19.01
+3,1,16,00:30:38,16 003038_-_Goal.mp4,8.02
+4,1,19,00:35:00,19 003500_-_Goal.mp4,9.01
+5,1,22,00:41:13,22 004113_-_Goal.mp4,9.01
+6,1,25,00:43:16,25 004316_-_Goal.mp4,10.02

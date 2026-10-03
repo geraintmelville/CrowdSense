@@ -40,7 +40,7 @@ from modelling.functions import (
 def report_curve(
     name: str,
     probabilities_df: pd.DataFrame,
-    labels: dict[int, list[tuple[float, float, str]]],
+    labels: dict[int, list[tuple[float, float]]],
     raw_durations: dict[int, float],
     merge_gap: float,
     lookback: float,

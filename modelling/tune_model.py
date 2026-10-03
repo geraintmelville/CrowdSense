@@ -198,7 +198,7 @@ def main() -> None:
     parser.add_argument("--matches", type=Path, default=MATCHES_PATH,
                         help="matches.csv (match_id, raw_filename, ..., audio_length_sec).")
     parser.add_argument("--n-iter", type=int, default=N_ITER,
-                        help="Number of sampled MODEL-hyperparameter combinations (default: 80). Each one "
+                        help="Number of sampled MODEL-hyperparameter combinations (default: 60). Each one "
                              "is evaluated against every candidate-window combo in CANDIDATE_PARAM_GRID.")
     parser.add_argument("--cv", type=int, default=CV_FOLDS,
                         help="Number of GroupKFold splits per candidate (default: 4).")

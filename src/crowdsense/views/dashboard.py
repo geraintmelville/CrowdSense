@@ -46,7 +46,7 @@ def _goal_intervals(result_key: str) -> list[tuple[float, float]]:
         return []
     match_id = matched.iloc[0]["match_id"]
     labels = pd.read_csv(clips_path)
-    labels = labels[(labels["match_id"] == match_id) & (labels["description"].str.casefold() == "goal")]
+    labels = labels[labels["match_id"] == match_id]
     intervals = []
     for label in labels.itertuples(index=False):
         start = sum(int(part) * factor for part, factor in zip(label.timestamp_formatted.split(":"), (3600, 60, 1)))

@@ -10,8 +10,8 @@ This script narrows each clip down to a short window centered on its acoustic
 peak, using the native-cadence YAMNet features already extracted by
 extract_features_YAMNet.py (data/processed/features/096_048/<raw_filename>.parquet):
 
-    1. For each clip whose description matches --target-labels, convert its
-       timestamp_formatted + length_sec into a [clip_start, clip_end] span in
+    1. For each goal clip in the database, convert its timestamp_formatted +
+       length_sec into a [clip_start, clip_end] span in
        match time (expanded slightly by --search-margin on both sides, since
        the roar can start just after or linger just past the editor's cut).
     2. Within that span, sum the YAMNet score columns named in --peak-labels
@@ -28,9 +28,8 @@ rather than smearing the positive-frame definition.
 Output: a CSV with one row per extracted label, plus enough of the original
 clip bounds and the raw peak score for auditing before it's trusted as ground
 truth. This CSV is the new input wherever the old load_labels() fed
-build_targets() -- (start_sec, end_sec, description) per match_id, just built
-here instead of on the fly.
-
+build_targets() -- (start_sec, end_sec) per match_id, just built here
+instead of on the fly.
 Usage:
     python preprocessing/extract_labels.py --features-dir data/processed/features/096_048 --output data/processed/labels/labels.csv
 """
@@ -59,7 +58,7 @@ def load_clips(db_path: Path) -> pd.DataFrame:
     clips = pd.read_sql_query(
         """
         SELECT clips.match_id, clips.clip_number, clips.timestamp_formatted,
-               clips.description, clips.length_sec, matches.raw_filename
+               clips.length_sec, matches.raw_filename
         FROM clips
         JOIN matches ON matches.match_id = clips.match_id
         WHERE matches.raw_filename IS NOT NULL
@@ -185,7 +184,6 @@ def main() -> None:
             "match_id": clip.match_id,
             "raw_filename": clip.raw_filename,
             "clip_number": clip.clip_number,
-            "description": clip.description,
             "clip_start_sec": round(clip_start, 2),
             "clip_end_sec": round(clip_end, 2),
             "peak_time_sec": round(peak_midpoint, 2),

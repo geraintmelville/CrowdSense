@@ -45,8 +45,7 @@ def export_database_csvs(
         ).fetchall()
         clips = conn.execute(
             """
-            SELECT match_id, clip_number, timestamp_formatted, description,
-                   filename, length_sec
+            SELECT match_id, clip_number, timestamp_formatted, filename, length_sec
             FROM clips
             ORDER BY match_id, clip_number
             """
@@ -64,7 +63,7 @@ def export_database_csvs(
         writer = csv.writer(csv_file)
         writer.writerow((
             "clip_id", "match_id", "clip_number", "timestamp_formatted",
-            "description", "filename", "length_sec"
+            "filename", "length_sec"
         ))
         writer.writerows(
             (clip_id, *clip)
@@ -146,17 +145,16 @@ def process_all(
             cursor.executemany(
                 """
                 INSERT INTO clips (
-                    match_id, clip_number, timestamp_formatted, description,
+                    match_id, clip_number, timestamp_formatted,
                     filename, length_sec
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 [
                     (
                         match_id,
                         clip_num,
                         clip["timestamp"],
-                        clip["description"],
                         clip["filename"],
                         clip["duration"],
                     )
