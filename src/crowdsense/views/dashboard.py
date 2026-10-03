@@ -13,6 +13,7 @@ from modelling.inference import format_timestamp, score_match, score_precomputed
 from modelling.model_artifact import load_model_artifact
 
 DEFAULT_DEMO_YOUTUBE_URL = "https://youtu.be/W8DhX4CIdKM"
+DEMO_START_OFFSET_SEC = 18 * 60 + 4
 
 
 @st.cache_resource
@@ -50,7 +51,13 @@ def _goal_intervals(result_key: str) -> list[tuple[float, float]]:
     intervals = []
     for label in labels.itertuples(index=False):
         start = sum(int(part) * factor for part, factor in zip(label.timestamp_formatted.split(":"), (3600, 60, 1)))
-        intervals.append((float(start), float(start) + float(label.length_sec)))
+        end = float(start) + float(label.length_sec)
+        if end <= DEMO_START_OFFSET_SEC:
+            continue
+        intervals.append((
+            max(0.0, float(start) - DEMO_START_OFFSET_SEC),
+            end - DEMO_START_OFFSET_SEC,
+        ))
     return intervals
 
 
@@ -69,9 +76,11 @@ def _render_results(result: dict, youtube_url: str) -> None:
 
     candidate_seconds = float(clips["length_sec"].sum()) if not clips.empty else 0.0
     budget_percent = candidate_seconds / result["duration"] if result["duration"] else 0.0
-    cols = st.columns(2)
+    cols = st.columns(3)
     cols[0].metric("Confirmed budget", f"{_format_mmss(candidate_seconds)} ({budget_percent:.1%})")
     cols[1].metric("Recall", f"{len(hit_goals)} / {len(goals)} goals" if goals else "Unavailable")
+    threshold = clips.attrs.get("threshold")
+    cols[2].metric("Selected threshold", f"{threshold:.3f}" if threshold is not None else "Unavailable")
 
     st.success(
         f"Scored {result['n_windows']} windows across "

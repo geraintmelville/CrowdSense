@@ -78,18 +78,58 @@ def format_timestamp(seconds: float) -> str:
 
 
 def _build_candidate_clips(
-    starts: np.ndarray, probabilities: np.ndarray, duration: float, bundle: dict
+    starts: np.ndarray,
+    probabilities: np.ndarray,
+    duration: float,
+    bundle: dict,
+    target_budget: float = 0.30,
 ) -> tuple[pd.DataFrame, float, int]:
-    selected_starts = starts[probabilities >= bundle["threshold"]]
-    intervals = merge_intervals(
-        [(max(0, start - bundle["lookback"]), min(duration, start + bundle["window_sec"] + bundle["postroll"]))
-         for start in selected_starts],
-        bundle["merge_gap"],
-    )
-    clips = pd.DataFrame(intervals, columns=["start_sec", "end_sec"])
+    def make_clips(threshold: float) -> pd.DataFrame:
+        selected_starts = starts[probabilities >= threshold]
+        intervals = merge_intervals(
+            [(max(0, start - bundle["lookback"]),
+              min(duration, start + bundle["window_sec"] + bundle["postroll"]))
+             for start in selected_starts],
+            bundle["merge_gap"],
+        )
+        return pd.DataFrame(intervals, columns=["start_sec", "end_sec"])
+
+    # Budget changes monotonically as the threshold rises. Search the score
+    # breakpoints, then compare the two thresholds surrounding the target.
+    breakpoints = np.unique(probabilities)
+    if len(breakpoints):
+        low, high = 0, len(breakpoints)
+        while low < high:
+            middle = (low + high) // 2
+            candidate = make_clips(float(breakpoints[middle]))
+            candidate_seconds = candidate["end_sec"].sub(candidate["start_sec"]).sum()
+            budget = candidate_seconds / duration if duration else 0.0
+            if budget <= target_budget:
+                high = middle
+            else:
+                low = middle + 1
+
+        candidate_indices = {max(0, low - 1), min(low, len(breakpoints) - 1)}
+        choices = []
+        for index in candidate_indices:
+            threshold = float(breakpoints[index])
+            candidate = make_clips(threshold)
+            candidate_seconds = candidate["end_sec"].sub(candidate["start_sec"]).sum()
+            budget = candidate_seconds / duration if duration else 0.0
+            choices.append((abs(budget - target_budget), threshold, candidate))
+        empty_threshold = float(np.nextafter(breakpoints[-1], np.inf))
+        empty_clips = make_clips(empty_threshold)
+        choices.append((target_budget, empty_threshold, empty_clips))
+        _, threshold, clips = min(choices, key=lambda item: (item[0], item[1]))
+    else:
+        threshold = float(bundle["threshold"])
+        clips = make_clips(threshold)
+
     clips["length_sec"] = clips["end_sec"] - clips["start_sec"]
     clips["start"] = clips["start_sec"].apply(format_timestamp)
     clips["end"] = clips["end_sec"].apply(format_timestamp)
+    clips.attrs["threshold"] = threshold
+    clips.attrs["target_budget"] = target_budget
     return clips, duration, len(starts)
 
 
