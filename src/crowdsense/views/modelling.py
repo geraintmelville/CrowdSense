@@ -33,20 +33,15 @@ with section(P, "window_grid", "3 · Candidate-window grid 🔒 training matches
         swept against a grid of **lookback × postroll × merge-gap** settings. Reshaping existing
         probabilities into merged intervals is cheap, so no refitting is needed. The best
         combination is written to the results CSV with the winning parameters, and
-        `save_final_model.py` / `eval_model.py` load it by default.
+        `save_final_model.py` loads it from the tuning results and stores it in the model artifact;
+        `eval_model.py` reads the candidate-window settings from that artifact.
+        For a manual final fit, `save_final_model.py` also accepts explicit XGBoost settings
+        via `--model-params` (a JSON object) and explicit `--lookback`, `--postroll`, and
+        `--merge-gap` values; supplying all of them avoids reading the tuning-results CSV.
         """
     )
 
-with section(P, "train_score", "4 · Train & test scoring"):
-    st.markdown(
-        """
-        `train_predict.py` fits the tuned model on every match except the 8 test matches and
-        writes per-window probabilities for those test matches. No threshold is applied here;
-        `eval_model.py` sweeps thresholds over those probabilities.
-        """
-    )
-
-with section(P, "final", "5 · Final model & deployment threshold 🔒 training matches only"):
+with section(P, "final", "4 · Final model & deployment threshold 🔒 training matches only"):
     st.markdown(
         """
         `save_final_model.py` builds pooled grouped OOF predictions across the training matches
@@ -54,7 +49,9 @@ with section(P, "final", "5 · Final model & deployment threshold 🔒 training 
         placeholder by default), tie-breaking on recall. This closest-point target can land
         slightly above or below the target; test matches are excluded from threshold selection. The model is then refit
         on all non-test training matches and
-        saved as `model.ubj` plus `model.json` (threshold, feature columns, YAMNet score
-        indices, window/stride, PCA components + mean, and the candidate-window settings).
+        saved as `model.ubj` plus `model.json` (threshold, target budget, feature columns,
+        YAMNet score indices, window/stride, PCA components + mean, and candidate-window settings).
+        `eval_model.py` loads that artifact, scores the held-out test matches, reports the test
+        recall-budget curve, and marks the training-selected threshold on the plot.
         """
     )

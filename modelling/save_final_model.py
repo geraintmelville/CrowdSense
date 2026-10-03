@@ -1,6 +1,7 @@
 """Train and persist a single final model + decision threshold for the dashboard.
 
-Run this ONCE after tune_model.py has produced tuned hyperparameters. It
+Run this ONCE after tune_model.py has produced tuned hyperparameters, or supply
+model hyperparameters and candidate-window settings explicitly. It
 produces data/modelling/final_model/model.ubj and model.json, containing everything
 dashboard.py needs to score new footage without retraining on every upload.
 
@@ -11,6 +12,8 @@ Candidate-window settings (lookback/postroll/merge-gap): now loaded by
 default from whichever combination tune_model.py's grid search selected
 alongside the winning model hyperparameters (same --results file). Pass
 --lookback/--postroll/--merge-gap explicitly to override any of them.
+Pass --model-params with a JSON object to use explicit model hyperparameters
+instead of loading them from tune_model.py's results.
 
 PCA: this now loads the PCA transform extract_features.py already fit and
 saved to --pca-transform (pca_transform.npz).
@@ -21,12 +24,13 @@ threshold selection and final fitting exclude TEST_MATCH_IDS.
 """
 
 import argparse
+import json
 from pathlib import Path
 
 import numpy as np
 
 from constants import (
-    DEPLOYMENT_BUDGET, FEATURES_DIR, FINAL_CURVE_N_THRESHOLDS, LABELS_PATH, MATCHES_PATH,
+    FEATURES_DIR, FINAL_CURVE_N_THRESHOLDS, LABELS_PATH, MATCHES_PATH, TARGET_BUDGET,
     MODEL_PATH, MODEL_RESULTS_PATH, PCA_DIR, RANDOM_STATE,
 )
 
@@ -78,8 +82,11 @@ def main() -> None:
     parser.add_argument("--matches", type=Path, default=MATCHES_PATH,
                         help="matches.csv (match_id, raw_filename, ..., audio_length_sec).")
     parser.add_argument("--results", type=Path, default=MODEL_RESULTS_PATH,
-                        help="Tuning results written by tune_model.py.")
-    parser.add_argument("--budget", type=float, default=DEPLOYMENT_BUDGET,
+                        help="Tuning results written by tune_model.py; only needed for settings not supplied explicitly.")
+    parser.add_argument("--model-params", type=json.loads, default=None,
+                        help='Explicit XGBoost hyperparameters as a JSON object, e.g. \'{"n_estimators":900,"max_depth":3}\'; '
+                             "default: winning parameters from --results.")
+    parser.add_argument("--budget", type=float, default=TARGET_BUDGET,
                         help="Target candidate-footage budget as a fraction of raw footage (default: 0.33).")
     parser.add_argument("--lookback", type=float, default=None,
                         help="Override the tuned lookback (seconds); default: whatever tune_model.py's "
@@ -93,18 +100,34 @@ def main() -> None:
     args = parser.parse_args()
 
     df = load_features(args.features)
-    model_params = dict(load_best_params(args.results))
-    print(f"Loaded tuned parameters from {args.results}: {model_params}")
+    if args.model_params is not None:
+        if not isinstance(args.model_params, dict) or not args.model_params:
+            parser.error("--model-params must be a non-empty JSON object.")
+        model_params = dict(args.model_params)
+        print(f"Using explicit model parameters: {model_params}")
+    else:
+        model_params = dict(load_best_params(args.results))
+        print(f"Loaded tuned parameters from {args.results}: {model_params}")
 
-    tuned_window = load_best_candidate_config(args.results)
-    lookback = args.lookback if args.lookback is not None else tuned_window["lookback"]
-    postroll = args.postroll if args.postroll is not None else tuned_window["postroll"]
-    merge_gap = args.merge_gap if args.merge_gap is not None else tuned_window["merge_gap"]
+    window_overrides = {
+        name: value for name, value in
+        [("lookback", args.lookback), ("postroll", args.postroll), ("merge_gap", args.merge_gap)]
+        if value is not None
+    }
+    if len(window_overrides) == 3:
+        tuned_window = None
+        lookback, postroll, merge_gap = args.lookback, args.postroll, args.merge_gap
+    else:
+        tuned_window = load_best_candidate_config(args.results)
+        lookback = args.lookback if args.lookback is not None else tuned_window["lookback"]
+        postroll = args.postroll if args.postroll is not None else tuned_window["postroll"]
+        merge_gap = args.merge_gap if args.merge_gap is not None else tuned_window["merge_gap"]
     overrides = {name: value for name, value in
                  [("lookback", args.lookback), ("postroll", args.postroll), ("merge_gap", args.merge_gap)]
                  if value is not None}
+    source = f"tuned={tuned_window}" if tuned_window is not None else "all settings explicit"
     print(f"Candidate window: lookback={lookback:.0f}s postroll={postroll:.0f}s merge_gap={merge_gap:.0f}s "
-          f"(tuned={tuned_window}{', overridden: ' + str(overrides) if overrides else ''})")
+          f"({source}{', overridden: ' + str(overrides) if overrides else ''})")
 
     refined_labels = load_labels(args.labels)
     clip_labels = load_labels(args.labels, start_column="clip_start_sec", end_column="clip_end_sec")
@@ -149,6 +172,7 @@ def main() -> None:
 
     metadata = {
         "threshold": threshold,
+        "target_budget": args.budget,
         "feature_columns": selected_features,
         "yamnet_score_indices": list(YAMNET_SCORE_INDICES),
         "window_sec": WINDOW_SEC,

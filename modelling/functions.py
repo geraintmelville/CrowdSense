@@ -1,4 +1,4 @@
-"""Shared functions for the modelling pipeline (tune_model.py, train_predict.py,
+"""Shared functions for the modelling pipeline (tune_model.py,
 eval_model.py, save_final_model.py).
 
 Feature extraction is fixed to a single configuration (see
@@ -107,6 +107,7 @@ def recall_budget_curve(
     lookback: float = 0.0,
     postroll: float = 0.0,
     n_thresholds: int = CURVE_N_THRESHOLDS,
+    extra_thresholds: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Sweep decision thresholds and return (budgets, recalls, thresholds),
     sorted by ascending budget, covering the full [0, 1] budget range.
@@ -133,7 +134,10 @@ def recall_budget_curve(
 
     levels = 1.0 - np.geomspace(1e-4, 0.5, n_thresholds)
     quantile_grid = np.quantile(probabilities, levels)
-    thresholds = np.unique(np.concatenate(([probabilities.max() + 1e-6], quantile_grid)))[::-1]
+    threshold_values = [probabilities.max() + 1e-6, *quantile_grid]
+    if extra_thresholds is not None:
+        threshold_values.extend(np.asarray(extra_thresholds, dtype=float).reshape(-1))
+    thresholds = np.unique(threshold_values)[::-1]
 
     budgets, recalls = [], []
     for threshold in thresholds:

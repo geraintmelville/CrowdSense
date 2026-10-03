@@ -1,137 +1,117 @@
-"""Evaluate test-set probabilities written by train_predict.py.
+"""Evaluate the saved final model on the held-out test matches.
 
-Reads the per-window probability CSV for TEST_MATCH_IDS (modelling/functions.py),
-sweeps thresholds, and reports recall at a handful of budget checkpoints plus
-partial recall-budget AUC (band 25-40%), matching the tuning ranking metric.
-
-There is no tiering in this project -- the old --tier-map breakdown is
-removed; this reports the pooled curve over the full test set only.
-
-Candidate-window settings (lookback/postroll/merge-gap) default to whichever
-combination tune_model.py's grid search selected (loaded from --results, the
-same file train_predict.py's model hyperparameters come from), so this
-reports the curve for the settings actually shipped in the tuned model.
-Override any of them individually with --lookback/--postroll/--merge-gap.
+Run save_final_model.py after tuning, then run this script to score the test
+features, report the recall-budget curve, and save its plot. The operating
+threshold is selected from training-only out-of-fold predictions and loaded
+from the model artifact; test labels are used only for evaluation.
 
 Usage:
-    python -m modelling.eval_model --probabilities data/modelling/predictions/yamnet_audio_test_probabilities.csv \
-        --labels data/processed/labels/labels.csv --matches data/metadata/matches.csv
+    python -m modelling.save_final_model
+    python -m modelling.eval_model
 """
 
 import argparse
 from pathlib import Path
 
 import matplotlib
-import pandas as pd
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from constants import (
-    BUDGET_BAND, BUDGET_CHECKPOINTS, LABELS_PATH, MATCHES_PATH, MODEL_RESULTS_PATH,
-    RECALL_BUDGET_PLOT_PATH, TEST_PROBABILITIES_PATH,
+    BUDGET_BAND, BUDGET_CHECKPOINTS, FEATURES_DIR, LABELS_PATH, MATCHES_PATH,
+    MODEL_PATH, RECALL_BUDGET_PLOT_PATH, TARGET_BUDGET,
 )
-
 from modelling.functions import (
-    TEST_MATCH_IDS, curve_partial_auc, load_best_candidate_config, load_labels,
+    TEST_MATCH_IDS, curve_partial_auc, load_features, load_labels,
     load_raw_durations, recall_at_budget, recall_budget_curve,
+    train_test_split_by_match_id,
 )
-
-def report_curve(
-    name: str,
-    probabilities_df: pd.DataFrame,
-    labels: dict[int, list[tuple[float, float]]],
-    raw_durations: dict[int, float],
-    merge_gap: float,
-    lookback: float,
-    postroll: float,
-    plot_output: Path | None = None,
-) -> None:
-    """Print recall checkpoints and partial recall-budget AUC (band 25-40%)."""
-    groups = probabilities_df["match_id"].to_numpy()
-    starts = probabilities_df["start_sec"].to_numpy()
-    probabilities = probabilities_df["probability"].to_numpy()
-    if len(groups) == 0:
-        print(f"  [{name}] no rows, skipping")
-        return
-
-    budgets, recalls, _ = recall_budget_curve(
-        groups, starts, probabilities, labels, merge_gap,
-        raw_durations=raw_durations, lookback=lookback, postroll=postroll,
-    )
-    partial_auc = curve_partial_auc(budgets, recalls, *BUDGET_BAND)
-    checkpoints = ", ".join(
-        f"{budget:.0%}\u2192{recall_at_budget(budgets, recalls, budget):.1%}" for budget in BUDGET_CHECKPOINTS
-    )
-    n_matches = probabilities_df["match_id"].nunique()
-    print(f"  [{name}] n_matches={n_matches}  partial recall-budget AUC (band 25-40%)={partial_auc:.3f}")
-    print(f"      recall @ budget: {checkpoints}")
-
-    if plot_output is not None:
-        plot_output.parent.mkdir(parents=True, exist_ok=True)
-        figure, axis = plt.subplots(figsize=(8, 5))
-        axis.plot(budgets, recalls, color="#1f77b4", linewidth=2.5)
-        axis.fill_between(budgets, recalls, alpha=0.12, color="#1f77b4")
-        axis.axvspan(*BUDGET_BAND, color="#ffbf00", alpha=0.18, label="Tuning band (25-40%)")
-        axis.set(
-            title="Recall-budget curve (held-out test set)",
-            xlabel="Candidate footage budget",
-            ylabel="Recall",
-            xlim=(0, 1),
-            ylim=(0, 1),
-        )
-        axis.grid(alpha=0.25)
-        axis.legend()
-        figure.tight_layout()
-        figure.savefig(plot_output, dpi=160)
-        plt.close(figure)
-        print(f"      wrote plot -> {plot_output}")
+from modelling.model_artifact import load_model_artifact
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--probabilities", type=Path, default=TEST_PROBABILITIES_PATH)
+    parser.add_argument("--features", type=Path, default=FEATURES_DIR,
+                        help="Directory of per-match parquet feature files.")
+    parser.add_argument("--model", type=Path, default=MODEL_PATH,
+                        help="Saved model artifact created by save_final_model.py.")
     parser.add_argument("--labels", type=Path, default=LABELS_PATH,
-                        help="Labels CSV written by extract_labels.py; original clip bounds are used for recall.")
+                        help="Labels CSV; original clip bounds are used to evaluate recall.")
     parser.add_argument("--matches", type=Path, default=MATCHES_PATH,
-                        help="matches.csv (match_id, raw_filename, ..., audio_length_sec).")
-    parser.add_argument("--results", type=Path, default=MODEL_RESULTS_PATH,
-                        help="Tuning results written by tune_model.py; supplies the default candidate window.")
+                        help="matches.csv containing raw audio durations.")
     parser.add_argument("--plot-output", type=Path, default=RECALL_BUDGET_PLOT_PATH,
-                        help="Path for the pooled held-out test-set recall-budget plot.")
-    parser.add_argument("--lookback", type=float, default=None,
-                        help="Override the tuned lookback (seconds); default: tuned value.")
-    parser.add_argument("--postroll", type=float, default=None,
-                        help="Override the tuned postroll (seconds); default: tuned value.")
-    parser.add_argument("--merge-gap", type=float, default=None,
-                        help="Override the tuned merge gap (seconds); default: tuned value.")
+                        help="Path for the held-out test recall-budget plot.")
     args = parser.parse_args()
 
-    probabilities_df = pd.read_csv(args.probabilities)
-    required_columns = {"match_id", "start_sec", "probability"}
-    missing_columns = required_columns - set(probabilities_df.columns)
-    if missing_columns:
-        raise ValueError(f"Missing required probability columns: {sorted(missing_columns)}")
+    bundle = load_model_artifact(args.model)
+    required_metadata = {"threshold", "feature_columns", "lookback", "postroll", "merge_gap"}
+    missing_metadata = required_metadata - bundle.keys()
+    if missing_metadata:
+        raise ValueError(f"Model artifact is missing required metadata: {sorted(missing_metadata)}")
 
-    expected_match_ids = set(TEST_MATCH_IDS)
-    actual_match_ids = set(probabilities_df["match_id"].astype(int))
-    unexpected_match_ids = actual_match_ids - expected_match_ids
-    if unexpected_match_ids:
-        raise ValueError(f"Probability file contains matches outside the test set: {sorted(unexpected_match_ids)}")
+    df = load_features(args.features)
+    _, test_idx = train_test_split_by_match_id(df["match_id"].to_numpy(), TEST_MATCH_IDS)
+    test_df = df.iloc[test_idx]
+    missing_features = set(bundle["feature_columns"]) - set(test_df.columns)
+    if missing_features:
+        raise ValueError(f"Test features are missing model columns: {sorted(missing_features)}")
 
-    tuned_window = load_best_candidate_config(args.results)
-    lookback = args.lookback if args.lookback is not None else tuned_window["lookback"]
-    postroll = args.postroll if args.postroll is not None else tuned_window["postroll"]
-    merge_gap = args.merge_gap if args.merge_gap is not None else tuned_window["merge_gap"]
-    print(f"Candidate window: lookback={lookback:.0f}s postroll={postroll:.0f}s merge_gap={merge_gap:.0f}s")
-
+    model = bundle["model"]
+    probabilities = model.predict_proba(
+        test_df[bundle["feature_columns"]].to_numpy(dtype=np.float32)
+    )[:, 1]
+    groups = test_df["match_id"].to_numpy()
+    starts = test_df["start_sec"].to_numpy()
     labels = load_labels(args.labels, start_column="clip_start_sec", end_column="clip_end_sec")
     raw_durations = load_raw_durations(args.matches)
 
-    print(f"Evaluating test-set probabilities: {args.probabilities}")
-    print(f"Test matches: {sorted(expected_match_ids)}")
-    report_curve("ALL TEST MATCHES", probabilities_df, labels, raw_durations,
-                 merge_gap, lookback, postroll, args.plot_output)
+    threshold = float(bundle["threshold"])
+    budgets, recalls, thresholds = recall_budget_curve(
+        groups, starts, probabilities, labels, float(bundle["merge_gap"]),
+        raw_durations=raw_durations, lookback=float(bundle["lookback"]),
+        postroll=float(bundle["postroll"]), extra_thresholds=np.asarray([threshold]),
+    )
+    operating_idx = int(np.flatnonzero(np.isclose(thresholds, threshold, rtol=1e-12, atol=1e-15))[0])
+    operating_budget = float(budgets[operating_idx])
+    operating_recall = float(recalls[operating_idx])
+    partial_auc = curve_partial_auc(budgets, recalls, *BUDGET_BAND)
+    checkpoints = ", ".join(
+        f"{budget:.0%}→{recall_at_budget(budgets, recalls, budget):.1%}"
+        for budget in BUDGET_CHECKPOINTS
+    )
+
+    print(f"Evaluating saved model: {args.model}")
+    print(f"Test matches: {sorted(TEST_MATCH_IDS)}")
+    print(f"Candidate window: lookback={bundle['lookback']:.0f}s postroll={bundle['postroll']:.0f}s "
+          f"merge_gap={bundle['merge_gap']:.0f}s")
+    print(f"Training-selected threshold: {threshold:.6f} "
+          f"(target budget={bundle.get('target_budget', TARGET_BUDGET):.1%}; "
+          f"test budget={operating_budget:.1%}, test recall={operating_recall:.1%})")
+    print(f"Test partial recall-budget AUC (band {BUDGET_BAND[0]:.0%}-{BUDGET_BAND[1]:.0%}): {partial_auc:.3f}")
+    print(f"Test recall @ budget: {checkpoints}")
+
+    args.plot_output.parent.mkdir(parents=True, exist_ok=True)
+    figure, axis = plt.subplots(figsize=(8, 5))
+    axis.plot(budgets, recalls, color="#1f77b4", linewidth=2.5, label="Held-out test curve")
+    axis.fill_between(budgets, recalls, alpha=0.12, color="#1f77b4")
+    axis.axvspan(*BUDGET_BAND, color="#ffbf00", alpha=0.18, label="Tuning band (25-40%)")
+    axis.scatter([operating_budget], [operating_recall], color="#d62728", zorder=3,
+                 label="Training-selected threshold")
+    axis.set(
+        title="Recall-budget curve (held-out test set)",
+        xlabel="Candidate footage budget",
+        ylabel="Recall",
+        xlim=(0, 1),
+        ylim=(0, 1),
+    )
+    axis.grid(alpha=0.25)
+    axis.legend()
+    figure.tight_layout()
+    figure.savefig(args.plot_output, dpi=160)
+    plt.close(figure)
+    print(f"Saved test recall-budget plot: {args.plot_output}")
 
 
 if __name__ == "__main__":

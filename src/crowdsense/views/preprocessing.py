@@ -82,6 +82,7 @@ with section(P, "labels", "5 · Label refinement"):
         1. Take the clip's `[start, start + length]` span, expanded by 5s on both sides.
         2. Sum the Cheering + Crowd + Applause scores per frame and find the peak frame.
         3. Emit a fixed 3s label window centred on that peak. 
+        
         The labels CSV keeps both the refined window (used for training targets) and the original
         clip bounds (used to evaluate model performance), plus the peak time and score for auditing.
         The heuristic assumes the strongest Cheering/Crowd/Applause peak is near the goal; it

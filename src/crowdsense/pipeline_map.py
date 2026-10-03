@@ -169,39 +169,25 @@ NODES = [
                "The top candidates are close (AUC 0.80 to 0.82, fold std about 0.015), so small differences "
                "between them aren't strong evidence."],
     ),
-    dict(
-        id="train_predict", kind="script", col=0, row=6, port=150,
-        title="train_predict", sub="Fit train, score test",
-        summary="Fits one XGBoost model with the tuned parameters on every non-test match, then writes a "
-                "probability for each window of the 8 test matches.",
-        where=["modelling/train_predict.py"],
-        notes=["No threshold is chosen here. That decision is made later by looking at the recall-vs-budget curve."],
-    ),
     # ------------------------------------------------------ Evaluate and package
     dict(
-        id="test_probs", kind="data", col=0, row=7, port=150,
-        title="Test probabilities", sub="Per-window scores",
-        summary="match_id, raw_filename, start_sec and probability for every window of the held-out matches.",
-        where=["data/modelling/predictions/yamnet_audio_test_probabilities.csv"],
-    ),
-    dict(
         id="eval_model", kind="script", col=1, row=7,
-        title="eval_model", sub="Recall vs budget curve",
-        summary="Sweeps thresholds over the test probabilities. At each one it merges the padded windows and "
-                "reports recall (goals fully contained) against budget (candidate seconds / raw seconds).",
+        title="eval_model", sub="Score test, plot curve",
+        summary="Loads the saved final model, scores held-out matches, sweeps test thresholds, and reports "
+                "recall (goals fully contained) against budget (candidate seconds / raw seconds).",
         where=["modelling/eval_model.py"],
-        notes=["Reports recall at 10%, 20%, 30%, 40% and 50% budget plus the full curve AUC, and saves a plot.",
-               "Uses the tuned lookback, postroll and merge gap unless overridden on the command line."],
+        notes=["Reports recall checkpoints and partial curve AUC, saves a plot, and marks the operating "
+               "threshold selected from training-only OOF predictions."],
     ),
     dict(
         id="save_final_model", kind="script", col=2, row=7,
-        title="save_final_model", sub="OOF threshold + refit",
+        title="save_final_model", sub="OOF threshold + train",
         summary="Picks a decision threshold from out-of-fold predictions so the candidate budget lands "
-                "closest to 30%, then refits the model on all training matches and saves it with its settings.",
+                "closest to TARGET_BUDGET, fits the model on all non-test matches, and saves it with its settings.",
         where=["modelling/save_final_model.py", "modelling/model_artifact.py"],
         notes=["The test matches are excluded from both the threshold selection and the final fit.",
-               "It also reads the training data and the tuned settings. Only the tuned-settings arrow is drawn "
-               "to keep the diagram readable."],
+               "It reads the training features and tuned settings, then supplies the model artifact to "
+               "both test evaluation and the dashboard."],
     ),
     # -------------------------------------------------------------------- Demo
     dict(
@@ -264,13 +250,10 @@ EDGES = [
     ("parquet", "training", dict(into=48)),
     ("labels", "training", dict(into=128)),
     ("training", "tune_model"),
-    ("training", "train_predict"),
     ("tune_model", "tuned"),
-    ("tuned", "train_predict"),
-    ("train_predict", "test_probs"),
     ("tuned", "save_final_model", dict(out=128)),
-    ("test_probs", "eval_model"),
     ("save_final_model", "bundle"),
+    ("save_final_model", "eval_model"),
     ("demo_audio", "streamlit_demo", dict(into=48)),
     ("demo_features", "streamlit_demo"),
     ("bundle", "streamlit_demo", dict(into=128)),
