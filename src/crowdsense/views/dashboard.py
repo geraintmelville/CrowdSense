@@ -13,7 +13,6 @@ from modelling.inference import format_timestamp, score_match, score_precomputed
 from modelling.model_artifact import load_model_artifact
 
 DEFAULT_DEMO_YOUTUBE_URL = "https://youtu.be/W8DhX4CIdKM"
-DEMO_START_OFFSET_SEC = 18 * 60 + 4
 
 
 @st.cache_resource
@@ -51,13 +50,7 @@ def _goal_intervals(result_key: str) -> list[tuple[float, float]]:
     intervals = []
     for label in labels.itertuples(index=False):
         start = sum(int(part) * factor for part, factor in zip(label.timestamp_formatted.split(":"), (3600, 60, 1)))
-        end = float(start) + float(label.length_sec)
-        if end <= DEMO_START_OFFSET_SEC:
-            continue
-        intervals.append((
-            max(0.0, float(start) - DEMO_START_OFFSET_SEC),
-            end - DEMO_START_OFFSET_SEC,
-        ))
+        intervals.append((float(start), float(start) + float(label.length_sec)))
     return intervals
 
 
