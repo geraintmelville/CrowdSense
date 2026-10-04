@@ -15,12 +15,11 @@ def section(title):
 
 
 st.title("Performance")
-st.caption("Held-out results, evaluation details, and current limitations.")
+st.caption("Evaluated on the 8 held-out test matches.")
 
 if RECALL_BUDGET_PLOT_PATH.is_file():
     st.image(
         str(RECALL_BUDGET_PLOT_PATH),
-        caption="Held-out test-set recall as the candidate footage budget increases.",
         width="stretch",
     )
 else:
