@@ -29,14 +29,6 @@ def load_demo_yamnet_model():
     return load_yamnet_model()
 
 
-@st.cache_data(show_spinner=False)
-def cached_score_match(audio_path: str, _bundle: dict):
-    """Cache full-match inference so reruns and visitors reuse the fixed demo result."""
-    return score_match(
-        Path(audio_path), _bundle, yamnet_model=load_demo_yamnet_model()
-    )
-
-
 def _render_results(result: dict, youtube_url: str) -> None:
     clips = result["clips"]
     goals = goal_intervals(result["result_key"])
@@ -149,7 +141,9 @@ def render_full_demo(bundle: dict, youtube_url: str) -> None:
     if st.button("Extract features and run analysis", type="primary"):
         try:
             with st.spinner("Extracting YAMNet features from the full-match audio and scoring..."):
-                clips, duration, n_windows = cached_score_match(str(audio_path), bundle)
+                clips, duration, n_windows = score_match(
+                    audio_path, bundle, yamnet_model=load_demo_yamnet_model()
+                )
         except (OSError, RuntimeError, ValueError) as error:
             st.error(f"Full demo failed: {error}")
             return
@@ -176,7 +170,8 @@ def render_demo(bundle: dict) -> None:
 
         - **Full demo** loads YAMNet and extracts features from the WAV file, loads the saved 
          PCA components to compress them. It then loads the pre-trained `XGBoost` model from `model.ubj`
-        and `model.json`, scores the features and constructs candidate clips.
+        and `model.json`, scores the features and constructs candidate clips, choosing a threshold
+        that corresponds with a budget as close to 33% as possible, see Modelling `eval_model.py` for justification of this.
         - **Quick demo** skips YAMNet feature extraction and scores cached pre-extracted features, as above.
         """
     )

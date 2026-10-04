@@ -48,8 +48,8 @@ with section("`extract_features.py`"):
         
         YAMNet is an open-source pretrained deep neural network from Google that classifies
          0.96s audio frames into 521 categories and generates audio embeddings. It uses a 
-         MobileNetV1‑based architecture, which is trained on the AudioSet-YouTube corpus, which
-         contains over 1.5 million 10s YouTube audio clips. This model allows us to detect 
+         MobileNetV1‑based architecture, which is trained on the AudioSet-YouTube corpus,
+         containing over 1.5 million 10s YouTube audio clips. This model allows us to detect 
          various audio events such as 'cheering', 'crowd', 'whistle' etc.
         
         Audio is resampled to 16 kHz and fed to YAMNet in bounded chunks at its **native
@@ -64,7 +64,7 @@ with section("`extract_features.py`"):
         `pca_transform.npz` to be reused on test matches and the demo. It is never refit so no test 
         embedding structure leaks into the features.
 
-        The output is a parquet file per match, with one row per YAMNet frame, and columns
+        The output is one parquet file per match, with one row per YAMNet frame, and columns
          consisting of the 11 class scores and the 16 PCA components.
 
         [TensorFlow's YAMNet guide](https://www.tensorflow.org/tutorials/audio/transfer_learning_audio)

@@ -128,6 +128,10 @@ with section("`eval_model.py`"):
       """
       This script takes the model described above and uses it to make predictions on the 8 test
       matches. The output probabilities are then swept over to produce the recall-budget curve,
-      as described in the Metrics page. This curve can be seen in the Performance page.
+      as described in the Metrics page. This curve can be seen in the Performance page. We choose 
+      the threshold . In deployment, CrowdSense can see the duration of the file it is ingesting 
+      and can choose a threshold that corresponds with a budget as close to 33% as possible, it is
+      therefore justified to use this methodology in the demo and in reporting headline
+      recall and budget and does not risk test set information leakage.
       """
     )
