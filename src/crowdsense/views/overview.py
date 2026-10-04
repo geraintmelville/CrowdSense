@@ -65,40 +65,54 @@ st.markdown(
     than 1/3 of the footage to review."""
 )
 st.header("Context")
-context = st.columns(3)
+st.markdown(
+    """
+    <style>
+    [class*="st-key-context-cards"] [data-testid="stVerticalBlockBorderWrapper"] {
+        height: 320px;
+        box-sizing: border-box;
+        overflow-y: auto;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-with context[0].container(border=True):
-    st.subheader("What is futsal?")
-    st.markdown(
-        """
-        Futsal is a fast-paced, five-a-side form of football played on a hard, indoor court.
-        It has 30 million players worldwide, but struggles with publicity, funding and media
-        coverage, especially in the UK. Clubs rely on social media to increase visibility and
-         grow the game.
-        """
-    )
+with st.container(key="context-cards"):
+    context = st.columns(3)
 
-with context[1].container(border=True):
-    st.subheader("What is Veo?")
-    st.markdown(
-        """
-        Veo is the main commercial option for automated sports video: its cameras capture a
-        180° view of the pitch, and its software tracks the ball to produce high quality
-         footage in tight spaces like an indoor court. They provide software that generates
-        highlights and statistics for sports like football, hockey and lacrosse.
-        """
-    )
+    with context[0].container(border=True):
+        st.subheader("What is futsal?")
+        st.markdown(
+            """
+            Futsal is a fast-paced, five-a-side form of football played on a hard, indoor court.
+            It has 30 million players worldwide, but struggles with publicity, funding and media
+            coverage, especially in the UK. Clubs rely on social media to increase visibility and
+             grow the game.
+            """
+        )
 
-with context[2].container(border=True):
-    st.subheader("The problem")
-    st.markdown(
-        """
-        CrowdSense was inspired by a conversation with an old coach, who explained that Veo
-        used to provide highlight detection but the feature was
-        eventually removed with no explanation. He also provided access to all of the club's
-         Veo footage and the highlight clips they had manually curated.
-        """
-    )
+    with context[1].container(border=True):
+        st.subheader("What is Veo?")
+        st.markdown(
+            """
+            Veo is the main commercial option for automated sports video: its cameras capture a
+            180° view of the pitch, and its software tracks the ball to produce high quality
+             footage in tight spaces like an indoor court. They provide software that generates
+            highlights and statistics for sports like football, hockey and lacrosse.
+            """
+        )
+
+    with context[2].container(border=True):
+        st.subheader("The problem")
+        st.markdown(
+            """
+            CrowdSense was inspired by a conversation with an old coach, who explained that Veo
+            used to provide highlight detection but the feature was
+            eventually removed with no explanation. He also provided access to all of the club's
+             Veo footage and the highlight clips they had manually curated.
+            """
+        )
 st.markdown(
     """
     Access to a large amount of labelled data opened the door to a supervised machine
@@ -112,16 +126,3 @@ st.markdown(
 )
 st.header("Pipeline Map")
 render_pipeline_map()
-st.markdown(
-    """
-    This project is a proof of concept. The model itself performs quite well considering
-    its design was limited by low computational resources. The app provides a demo rather
-     than the ability to upload matches and export candidates. An earlier version did
-      include cloud upload to an s3 bucket, a Lambda function to extract the audio and
-    send it back to the app for feature extraction and inference, however this was extremely
-     slow and was again hampered by the lack of budget. The demo runs on a single match,
-     not involved in testing or training. Full mode extracts features from
-     the WAV before scoring; Quick mode scores saved features. Both
-    produce candidate windows which can be reviewed in app via YouTube.
-    """
-)

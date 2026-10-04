@@ -89,16 +89,14 @@ def _render_results(result: dict, youtube_url: str) -> None:
         st.dataframe(table, hide_index=True, width="stretch")
         st.info("Set CROWDSENSE_DEMO_YOUTUBE_URL to enable timestamped YouTube playback.")
 
-    selected_index = st.selectbox(
+    selected_clip_number = st.selectbox(
         "Select a candidate to review",
-        options=clips.index,
-        format_func=lambda index: (
-            f"{clips.loc[index, 'start']} to {clips.loc[index, 'end']} "
-            f"({clips.loc[index, 'length_sec']:.1f}s)"
-        ),
+        options=range(1, len(clips) + 1),
+        format_func=lambda clip_number: f"Clip {clip_number}",
     )
-    if selected_index is not None and youtube_url:
-        st.video(youtube_url, start_time=int(clips.loc[selected_index, "start_sec"]))
+    if selected_clip_number is not None and youtube_url:
+        selected_clip = clips.iloc[selected_clip_number - 1]
+        st.video(youtube_url, start_time=int(selected_clip["start_sec"]))
 
 
 def render_quick_demo(bundle: dict, youtube_url: str) -> None:
@@ -173,30 +171,13 @@ def render_demo(bundle: dict) -> None:
     st.title("Audio Highlight Candidate Finder")
     st.markdown(
         """
-        CrowdSense scores audio from a prepared futsal match and groups high-scoring windows
-        into candidate clips for an editor to review. Choose between two ways to prepare the
-        audio:
+        CrowdSense live demo predicts on a ~25min audio file from a match not seen in training or testing,
+        and lets users review the resulting candidate clips via YouTube.
 
-        - **Quick demo** scores cached features from `demo/features/` and skips YAMNet feature
-          extraction. Its duration estimate uses the final cached frame start plus the model
-          window, so it may differ slightly from the source audio duration.
-        - **Full demo** extracts YAMNet features from the matching full-match WAV in
-          `demo/raw/audio/` while running analysis. Prepare the WAV from a source MP4 in
-          `demo/raw/video/` with `python -m demo.prepare_demo`.
-
-        The demo inference module applies the saved PCA projection and scores each audio window
-        with the XGBoost model in `model.ubj` and `model.json`. Quick demo scores cached
-        features; Full demo computes the same features and scores from the selected audio. The
-        PCA projection is reused and never refit during inference. Windows are scored every
-        0.48 seconds; those at or above the saved threshold are padded with the configured
-        lookback and postroll, then merged when they are within `merge_gap` of one another.
-        This produces a short list of candidate clips instead of a score for each window.
-
-        Review the merged timestamps and select a candidate for in-page playback. Set
-        `CROWDSENSE_DEMO_YOUTUBE_URL` to the selected match's YouTube URL to show timestamped
-        links and playback. Timestamps are relative to the start of the selected audio, so the
-        video needs to start at the same point. This low-traffic proof of concept works with
-        prepared match data; it does not provide match uploads or clip export.
+        - **Full demo** loads YAMNet and extracts features from the WAV file, loads the saved 
+         PCA components to compress them. It then loads the pre-trained `XGBoost` model from `model.ubj`
+        and `model.json`, scores the features and constructs candidate clips.
+        - **Quick demo** skips YAMNet feature extraction and scores cached pre-extracted features, as above.
         """
     )
     mode = st.radio("Demo mode", ["Quick demo", "Full demo"], horizontal=True)
@@ -229,3 +210,12 @@ def render_dashboard() -> None:
 
 
 render_dashboard()
+st.markdown(
+    """
+    This project is a proof of concept, since the app provides a demo rather
+    than the ability to upload matches and export candidates. An earlier version did
+     include cloud upload to an s3 bucket, a Lambda function to extract the audio and
+    send it back to the app for feature extraction and inference, however this was extremely
+     slow and was again hampered by the lack of budget.
+"""
+)

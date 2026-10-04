@@ -42,7 +42,7 @@ with section("Deployment threshold"):
     cols[2].metric("Partial AUC (25-40% )", "0.92")
     st.caption(
         "Results are measured on the test set and use the deployment" \
-        "threshold that corresponds with budget closest to 33%"
+        " threshold that corresponds with budget closest to 33%"
     )
 
 with section("Limitations & next steps"):
@@ -52,10 +52,7 @@ with section("Limitations & next steps"):
         eight recent matches. Label quality depends on the peak-finding heuristic; editor clips
         are the reference labels, and only Goal clips are positives. Pooled results can hide
         match-to-match variation, and performance on other clubs, venues, or recording
-        conditions has not been established.
-
-        Possible improvements include temporal features for the two-phase goal signature
-        (crowd spike → quiet period → restart whistle), a frame-merge-factor sweep using cached
-        probabilities, and per-match recall reporting in `eval_model.py`.
+        conditions has not been established. A possible improvement could be temporal features for the two-phase goal signature
+        (crowd spike → quiet period → restart whistle).
         """
     )
