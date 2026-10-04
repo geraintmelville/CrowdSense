@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+*.ubj binary
+*.npz binary
+*.parquet binary
+*.wav binary
+*.png binary

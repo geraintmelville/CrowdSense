@@ -30,7 +30,7 @@ from pathlib import Path
 import numpy as np
 
 from constants import (
-    FEATURES_DIR, LABELS_PATH, MATCHES_PATH, TARGET_BUDGET,
+    CV_FOLDS, FEATURES_DIR, LABELS_PATH, MATCHES_PATH, TARGET_BUDGET,
     MODEL_PATH, MODEL_RESULTS_PATH, PCA_DIR, RANDOM_STATE,
 )
 
@@ -94,12 +94,9 @@ def main() -> None:
         lookback = args.lookback if args.lookback is not None else tuned_window["lookback"]
         postroll = args.postroll if args.postroll is not None else tuned_window["postroll"]
         merge_gap = args.merge_gap if args.merge_gap is not None else tuned_window["merge_gap"]
-    overrides = {name: value for name, value in
-                 [("lookback", args.lookback), ("postroll", args.postroll), ("merge_gap", args.merge_gap)]
-                 if value is not None}
     source = f"tuned={tuned_window}" if tuned_window is not None else "all settings explicit"
     print(f"Candidate window: lookback={lookback:.0f}s postroll={postroll:.0f}s merge_gap={merge_gap:.0f}s "
-          f"({source}{', overridden: ' + str(overrides) if overrides else ''})")
+          f"({source}{', overridden: ' + str(window_overrides) if window_overrides else ''})")
 
     refined_labels = load_labels(args.labels)
     clip_labels = load_labels(args.labels, start_column="clip_start_sec", end_column="clip_end_sec")
@@ -130,7 +127,7 @@ def main() -> None:
     model = build_model(model_params, random_state)
     probabilities, _ = pooled_oof_predict(
         feature_matrix[train_idx], targets[train_idx], groups[train_idx],
-        model_params, random_state, n_folds=4,
+        model_params, random_state, n_folds=CV_FOLDS,
     )
     threshold, recall, budget = select_threshold(
         groups[train_idx], starts[train_idx], probabilities,

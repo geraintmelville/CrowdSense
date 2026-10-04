@@ -19,10 +19,10 @@ def create_demo_clip(input_video_path, output_video_path, start_seconds, duratio
     command = [
         imageio_ffmpeg.get_ffmpeg_exe(),
         "-y",
-        "-i",
-        str(input_video_path),
         "-ss",
         str(start_seconds),
+        "-i",
+        str(input_video_path),
         "-t",
         str(duration_seconds),
         "-vf",
@@ -39,7 +39,7 @@ def create_demo_clip(input_video_path, output_video_path, start_seconds, duratio
         "+faststart",
         str(output_video_path),
     ]
-    subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _run_ffmpeg(command)
     return output_video_path
 
 
@@ -65,8 +65,24 @@ def extract_audio_file(input_video_path, output_audio_path):
         "1",
         str(output_audio_path),
     ]
-    subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _run_ffmpeg(command)
     return output_audio_path
+
+
+def _run_ffmpeg(command):
+    """Run ffmpeg quietly on success and include its diagnostics on failure."""
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except subprocess.CalledProcessError as error:
+        if error.stderr:
+            print(error.stderr, end="" if error.stderr.endswith("\n") else "\n")
+        raise
 
 
 def extract_audio(input_dir, output_dir):

@@ -123,6 +123,7 @@ def main():
         # reapplied later to embeddings extracted from brand-new footage --
         # e.g. by save_final_model.py / dashboard.py -- without ever refitting
         # on data the deployed model wasn't trained with.
+        args.pca_dir.mkdir(parents=True, exist_ok=True)
         pca_path = args.pca_dir / "pca_transform.npz"
         np.savez(pca_path, components=pca.components_, mean=pca.mean_)
         print(f"Saved PCA transform -> {pca_path}")

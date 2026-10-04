@@ -7,10 +7,7 @@ import pandas as pd
 from constants.constants import DEMO_CLIPS, DEMO_MATCH
 from constants import DEMO_CANDIDATE_BUDGET
 from modelling.functions import merge_interval_arrays, score_feature_matrix
-from preprocessing.functions import (
-    build_feature_dataframe, extract_yamnet_features_streaming,
-    timestamp_to_seconds,
-)
+from preprocessing.functions import extract_yamnet_features_streaming, timestamp_to_seconds
 
 
 def format_timestamp(seconds: float) -> str:
@@ -148,16 +145,25 @@ def score_match(audio_path: Path, bundle: dict, yamnet_model=None):
         audio_path, include_embeddings=uses_pca, model=yamnet_model,
     )
     starts = np.arange(len(scores)) * bundle["stride_sec"]
+    feature_columns = bundle["feature_columns"]
+    feature_matrix = np.empty((len(scores), len(feature_columns)), dtype=np.float32)
     score_indices = list(bundle["yamnet_score_indices"])
-    score_features = scores[:, score_indices].astype(np.float32)
+    score_column_positions = {
+        f"yamnet_score_{index:03d}": index
+        for index in score_indices
+    }
+    for feature_position, column in enumerate(feature_columns):
+        if column in score_column_positions:
+            feature_matrix[:, feature_position] = scores[:, score_column_positions[column]]
     if uses_pca:
-        feature_df = build_feature_dataframe(
-            0, Path(audio_path).name, starts, score_features, embeddings,
-            np.asarray(bundle["pca_components"]), np.asarray(bundle["pca_mean"]),
-        )
-    else:
-        score_columns = [f"yamnet_score_{index:03d}" for index in score_indices]
-        feature_df = pd.DataFrame(score_features, columns=score_columns)
-        feature_df["start_sec"] = starts
-    feature_matrix = feature_df[bundle["feature_columns"]].to_numpy(dtype=np.float32)
+        pca_components = np.asarray(bundle["pca_components"], dtype=np.float32)
+        pca_mean = np.asarray(bundle["pca_mean"], dtype=np.float32)
+        np.subtract(embeddings, pca_mean, out=embeddings)
+        pca_features = np.empty((len(embeddings), pca_components.shape[0]), dtype=np.float32)
+        np.matmul(embeddings, pca_components.T, out=pca_features)
+        for component in range(pca_components.shape[0]):
+            column = f"yamnet_embedding_pca_{component:02d}"
+            feature_matrix[:, feature_columns.index(column)] = pca_features[:, component]
+        del embeddings, pca_features
+    del scores
     return _score_and_build_candidates(starts, feature_matrix, bundle, duration)

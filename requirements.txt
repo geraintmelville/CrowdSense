@@ -1,13 +1,13 @@
 # Runtime dependencies for the Streamlit app, including full-audio demo scoring.
-streamlit
+streamlit==1.64.0
 matplotlib
-numpy
-pandas
+numpy==2.5.3
+pandas==3.0.6
 pyarrow
-scikit-learn
-scipy
-soundfile
+scikit-learn==1.9.1
+scipy==1.18.1
+soundfile==0.14.0
 tensorflow-cpu
 tensorflow-hub
-xgboost
-imageio-ffmpeg
+xgboost==3.4.1
+imageio-ffmpeg==0.6.0

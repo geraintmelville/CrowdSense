@@ -80,11 +80,12 @@ def extract_yamnet_features_streaming(audio_path, include_embeddings=True, model
                 wav_data = resample_poly(wav_data, up, down).astype(np.float32)
             scores, embeddings, _ = model(wav_data)
             chunk_duration = min(YAMNET_CHUNK_SEC, total_duration - source_start / source_rate)
-            frame_starts = np.arange(len(scores), dtype=np.float32) * YAMNET_STRIDE_SEC
-            keep = frame_starts < chunk_duration
-            scores_chunks.append(scores.numpy()[keep])
+            # Keep the chunk's native YAMNet frames using a frame count, so
+            # floating-point timestamp comparisons cannot change alignment.
+            frame_count = round(chunk_duration / YAMNET_STRIDE_SEC)
+            scores_chunks.append(scores.numpy()[:frame_count])
             if include_embeddings:
-                embedding_chunks.append(embeddings.numpy()[keep])
+                embedding_chunks.append(embeddings.numpy()[:frame_count])
     return (
         np.concatenate(scores_chunks),
         np.concatenate(embedding_chunks) if include_embeddings else None,

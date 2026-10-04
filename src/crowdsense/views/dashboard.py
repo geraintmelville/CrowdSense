@@ -15,11 +15,18 @@ from crowdsense.demo_functions import (
     youtube_timestamp_url,
 )
 from modelling.functions import load_model_artifact
+from preprocessing.functions import load_yamnet_model
 
 
 @st.cache_resource
 def load_bundle(bundle_path: str) -> dict:
     return load_model_artifact(bundle_path)
+
+
+@st.cache_resource
+def load_demo_yamnet_model():
+    """Keep one YAMNet instance shared across Streamlit reruns and sessions."""
+    return load_yamnet_model()
 
 
 def _render_results(result: dict, youtube_url: str) -> None:
@@ -136,7 +143,9 @@ def render_full_demo(bundle: dict, youtube_url: str) -> None:
     if st.button("Extract features and run analysis", type="primary"):
         try:
             with st.spinner("Extracting YAMNet features from the full-match audio and scoring..."):
-                clips, duration, n_windows = score_match(audio_path, bundle)
+                clips, duration, n_windows = score_match(
+                    audio_path, bundle, yamnet_model=load_demo_yamnet_model()
+                )
         except (OSError, RuntimeError, ValueError) as error:
             st.error(f"Full demo failed: {error}")
             return

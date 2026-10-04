@@ -1,12 +1,22 @@
 """Single source of truth for active preprocessing and modelling configuration."""
 
 from pathlib import Path
+import os
 
 _THIS_FILE = Path(__file__).resolve()
-if _THIS_FILE.parents[2].name == "src":
-    ROOT_DIR = _THIS_FILE.parents[3]
+_ROOT_OVERRIDE = os.environ.get("CROWDSENSE_ROOT")
+if _ROOT_OVERRIDE:
+    ROOT_DIR = Path(_ROOT_OVERRIDE).expanduser().resolve()
 else:
-    ROOT_DIR = _THIS_FILE.parents[1]
+    for _candidate in _THIS_FILE.parents:
+        if (_candidate / "app.py").is_file() or (_candidate / "pyproject.toml").is_file():
+            ROOT_DIR = _candidate
+            break
+    else:
+        raise RuntimeError(
+            "Could not locate the CrowdSense project root (expected app.py or pyproject.toml); "
+            "set CROWDSENSE_ROOT to the project directory."
+        )
 
 # Repository data layout.
 DATA_DIR = ROOT_DIR / "data"
@@ -101,7 +111,7 @@ MODEL_PARAM_DISTRIBUTIONS = {
 }
 CANDIDATE_PARAM_GRID = {
     "lookback": [10.0, 15.0, 20.0, 30.0],
-    "postroll": [0.0, 1.0, 3.0, 5.0, 10.0],
+    "postroll": [0.0, 5.0, 10.0, 15.0],
     "merge_gap": [5.0, 10.0, 15.0],
 }
 RESULTS = {

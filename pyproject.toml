@@ -6,7 +6,21 @@ build-backend = "setuptools.build_meta"
 name = "crowdsense"
 version = "0.1.0"
 requires-python = ">=3.10"
+dependencies = [
+    "streamlit==1.64.0",
+    "matplotlib",
+    "numpy==2.5.3",
+    "pandas==3.0.6",
+    "pyarrow",
+    "scikit-learn==1.9.1",
+    "scipy==1.18.1",
+    "soundfile==0.14.0",
+    "tensorflow-cpu",
+    "tensorflow-hub",
+    "xgboost==3.4.1",
+    "imageio-ffmpeg==0.6.0",
+]
 
 [tool.setuptools.packages.find]
 where = [".", "src"]
-include = ["constants*", "modelling*", "preprocessing*", "views*", "crowdsense*"]
+include = ["constants*", "modelling*", "preprocessing*", "crowdsense*"]

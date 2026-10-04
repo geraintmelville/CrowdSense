@@ -142,6 +142,16 @@ def process_all(
                 continue
 
             cursor.execute("DELETE FROM clips WHERE match_id = ?", (match_id,))
+            probe_failures = [
+                clip for clip in clips_data.values() if clip["duration"] is None
+            ]
+            for clip in probe_failures:
+                print(f"[FLAG] {zip_filename}/{clip['filename']}: DURATION_PROBE_FAILED")
+            clips_data = {
+                clip_num: clip
+                for clip_num, clip in clips_data.items()
+                if clip["duration"] is not None
+            }
             cursor.executemany(
                 """
                 INSERT INTO clips (
