@@ -34,7 +34,7 @@ else:
         f"to generate `{relative_plot_path}`."
     )
 
-with section("Deployment threshold"):
+with section("Metrics"):
     cols = st.columns(3)
     cols[0].metric("Goal recall", f"{RESULTS['recall']:.0%}")
     cols[1].metric("Footage budget", f"{RESULTS['budget']:.0%}")
