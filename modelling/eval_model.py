@@ -26,9 +26,8 @@ from constants import (
 from modelling.functions import (
     TEST_MATCH_IDS, curve_partial_auc, load_features, load_labels,
     load_raw_durations, recall_at_budget, recall_budget_curve,
-    train_test_split_by_match_id,
+    train_test_split_by_match_id, load_model_artifact, score_feature_matrix,
 )
-from modelling.model_artifact import load_model_artifact
 
 
 def main() -> None:
@@ -59,9 +58,9 @@ def main() -> None:
         raise ValueError(f"Test features are missing model columns: {sorted(missing_features)}")
 
     model = bundle["model"]
-    probabilities = model.predict_proba(
-        test_df[bundle["feature_columns"]].to_numpy(dtype=np.float32)
-    )[:, 1]
+    probabilities = score_feature_matrix(
+        model, test_df[bundle["feature_columns"]].to_numpy(dtype=np.float32)
+    )
     groups = test_df["match_id"].to_numpy()
     starts = test_df["start_sec"].to_numpy()
     labels = load_labels(args.labels, start_column="clip_start_sec", end_column="clip_end_sec")

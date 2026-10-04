@@ -20,8 +20,9 @@ from constants import (
 )
 from preprocessing.build_clip_database import process_all
 from preprocessing.extract_audio import extract_audio
-from preprocessing.functions import build_feature_dataframe, extract_yamnet_match, list_matches
-from modelling.inference import load_yamnet_model
+from preprocessing.functions import (
+    build_feature_dataframe, extract_yamnet_match, list_matches, load_yamnet_model,
+)
 
 DEMO_DATABASE_PATH = DEMO_DIR / "clips_data.db"
 DEMO_MATCHES_PATH = DEMO_DIR / "matches.csv"

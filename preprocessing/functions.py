@@ -4,6 +4,9 @@ import imageio_ffmpeg
 import re
 import shutil
 import wave
+from functools import lru_cache
+from math import gcd
+import os
 
 from collections import defaultdict
 from pathlib import Path
@@ -12,8 +15,14 @@ import sqlite3
 
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import IncrementalPCA
+import soundfile as sf
+from scipy.signal import resample_poly
 
 from constants import SCORE_INDICES, YAMNET_STRIDE_SEC
+from constants import (
+    YAMNET_CHUNK_SEC, YAMNET_LOOKAHEAD_SEC, YAMNET_SAMPLE_RATE,
+)
 
 CLIP_FILENAME_REGEX = re.compile(r"^(?P<clip_num>\d+)\s+(?P<timestamp>\d{6})_-_(?P<desc>.+?)\.[a-zA-Z0-9]+$")
 
@@ -27,6 +36,54 @@ ZIP_FILENAME_REGEX = re.compile(
     r"^(?P<teams>.+?)(?:[\s_-]*highlights[\s_-]*)?(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})\.zip$",
     re.IGNORECASE,
 )
+
+
+@lru_cache(maxsize=1)
+def load_yamnet_model():
+    """Load YAMNet once for callers that do not provide a model."""
+    cache_dir = Path(os.environ.setdefault(
+        "TFHUB_CACHE_DIR", str(Path.home() / ".cache" / "tensorflow_hub")
+    ))
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    import tensorflow_hub as hub
+
+    return hub.load("https://tfhub.dev/google/yamnet/1")
+
+
+def extract_yamnet_features_streaming(audio_path, include_embeddings=True, model=None):
+    """Extract YAMNet features from bounded audio chunks."""
+    model = model if model is not None else load_yamnet_model()
+    scores_chunks = []
+    embedding_chunks = [] if include_embeddings else None
+    with sf.SoundFile(audio_path) as audio:
+        source_rate = audio.samplerate
+        chunk_frames = max(1, int(YAMNET_CHUNK_SEC * source_rate))
+        lookahead_frames = int(YAMNET_LOOKAHEAD_SEC * source_rate)
+        up = YAMNET_SAMPLE_RATE // gcd(YAMNET_SAMPLE_RATE, source_rate)
+        down = source_rate // gcd(YAMNET_SAMPLE_RATE, source_rate)
+        total_duration = audio.frames / source_rate
+        for source_start in range(0, audio.frames, chunk_frames):
+            audio.seek(source_start)
+            wav_data = audio.read(
+                min(audio.frames - source_start, chunk_frames + lookahead_frames),
+                dtype="float32", always_2d=False,
+            )
+            if wav_data.ndim > 1:
+                wav_data = wav_data.mean(axis=1)
+            if source_rate != YAMNET_SAMPLE_RATE:
+                wav_data = resample_poly(wav_data, up, down).astype(np.float32)
+            scores, embeddings, _ = model(wav_data)
+            chunk_duration = min(YAMNET_CHUNK_SEC, total_duration - source_start / source_rate)
+            frame_starts = np.arange(len(scores), dtype=np.float32) * YAMNET_STRIDE_SEC
+            keep = frame_starts < chunk_duration
+            scores_chunks.append(scores.numpy()[keep])
+            if include_embeddings:
+                embedding_chunks.append(embeddings.numpy()[keep])
+    return (
+        np.concatenate(scores_chunks),
+        np.concatenate(embedding_chunks) if include_embeddings else None,
+        total_duration,
+    )
 
 '''Stores functions used in processing the full match footage + folders of highlight clips 
 into a schema that labels each file.'''
@@ -274,8 +331,6 @@ def extract_yamnet_match(
     model=None,
 ):
     """Extract selected YAMNet scores and embeddings for one match audio file."""
-    from modelling.inference import extract_yamnet_features_streaming
-
     audio_path = audio_dir / f"{Path(raw_filename).stem}.wav"
     if not audio_path.exists():
         print(f"[SKIP] Missing audio: {audio_path}")
@@ -312,3 +367,28 @@ def build_feature_dataframe(
     features[score_names] = score_rows
     features[pca_columns] = pca_features.astype(np.float32)
     return features
+
+
+def fit_pca(embedding_paths, n_components: int, batch_size: int) -> IncrementalPCA:
+    """Fit IncrementalPCA over saved training embeddings in bounded batches."""
+    total_rows = sum(np.load(path, mmap_mode="r").shape[0] for path in embedding_paths)
+    if total_rows < n_components:
+        raise ValueError(f"Need at least {n_components} training windows to fit PCA; found {total_rows}")
+    batch_count = max(1, int(np.ceil(total_rows / batch_size)))
+    target_batch_size = total_rows // batch_count
+    pca = IncrementalPCA(n_components=n_components, batch_size=batch_size)
+    pending = []
+    pending_rows = 0
+    for embedding_path in embedding_paths:
+        embeddings = np.load(embedding_path)
+        pending.append(embeddings)
+        pending_rows += len(embeddings)
+        while pending_rows >= target_batch_size:
+            combined = np.concatenate(pending)
+            pca.partial_fit(combined[:target_batch_size])
+            combined = combined[target_batch_size:]
+            pending = [combined] if len(combined) else []
+            pending_rows = len(combined)
+    if pending_rows:
+        pca.partial_fit(np.concatenate(pending))
+    return pca

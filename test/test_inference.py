@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from modelling import inference
+from crowdsense import demo_functions as inference
 
 
 class StubClassifier:

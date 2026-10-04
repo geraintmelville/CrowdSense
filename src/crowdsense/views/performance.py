@@ -39,10 +39,10 @@ with section("Deployment threshold"):
     cols = st.columns(3)
     cols[0].metric("Goal recall", f"{RESULTS['recall']:.0%}")
     cols[1].metric("Footage budget", f"{RESULTS['budget']:.0%}")
-    cols[2].metric("Partial AUC (25-40% )", "0.919")
+    cols[2].metric("Partial AUC (25-40% )", "0.92")
     st.caption(
-        "Results are measured on the fixed held-out test split and use the deployment "
-        "threshold selected from training matches."
+        "Results are measured on the test set and use the deployment" \
+        "threshold that corresponds with budget closest to 33%"
     )
 
 with section("Limitations & next steps"):

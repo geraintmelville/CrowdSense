@@ -8,16 +8,21 @@ PCA-reduced embedding
 """
 
 from pathlib import Path
+import ast
+from dataclasses import dataclass
+import itertools
+import json
 import warnings
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import GroupKFold, ParameterSampler
 from xgboost import XGBClassifier
 
 from constants import (
-    CURVE_N_THRESHOLDS, MODEL_N_JOBS, SCORE_INDICES, TEST_MATCH_IDS,
-    YAMNET_STRIDE_SEC, YAMNET_WINDOW_SEC,
+    BUDGET_BAND, CURVE_N_THRESHOLDS, DEMO_CANDIDATE_BUDGET,
+    FINAL_CURVE_N_THRESHOLDS, MODEL_N_JOBS, MODEL_PARAM_DISTRIBUTIONS,
+    SCORE_INDICES, TEST_MATCH_IDS, YAMNET_STRIDE_SEC, YAMNET_WINDOW_SEC,
 )
 
 
@@ -77,6 +82,70 @@ def merge_intervals(intervals: list[tuple[float, float]], merge_gap: float) -> l
         else:
             merged.append((start, end))
     return merged
+
+
+def format_timestamp(seconds: float) -> str:
+    """Format a time in seconds as HH:MM:SS."""
+    seconds = max(0, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def score_feature_matrix(model: XGBClassifier, feature_matrix: np.ndarray) -> np.ndarray:
+    """Return positive-class probabilities for a model-ready feature matrix."""
+    return model.predict_proba(np.asarray(feature_matrix, dtype=np.float32))[:, 1]
+
+
+def build_candidate_clips(
+    starts: np.ndarray,
+    probabilities: np.ndarray,
+    duration: float,
+    bundle: dict,
+    target_budget: float = DEMO_CANDIDATE_BUDGET,
+) -> tuple[pd.DataFrame, float, int]:
+    """Turn scored windows into padded, merged candidate clips."""
+    def make_clips(threshold: float) -> pd.DataFrame:
+        selected_starts = starts[probabilities >= threshold]
+        intervals = merge_intervals(
+            [(max(0, start - bundle["lookback"]),
+              min(duration, start + bundle["window_sec"] + bundle["postroll"]))
+             for start in selected_starts],
+            bundle["merge_gap"],
+        )
+        return pd.DataFrame(intervals, columns=["start_sec", "end_sec"])
+
+    breakpoints = np.unique(probabilities)
+    if len(breakpoints):
+        low, high = 0, len(breakpoints)
+        while low < high:
+            middle = (low + high) // 2
+            candidate = make_clips(float(breakpoints[middle]))
+            seconds = candidate["end_sec"].sub(candidate["start_sec"]).sum()
+            if (seconds / duration if duration else 0.0) <= target_budget:
+                high = middle
+            else:
+                low = middle + 1
+        choices = []
+        for index in {max(0, low - 1), min(low, len(breakpoints) - 1)}:
+            threshold = float(breakpoints[index])
+            candidate = make_clips(threshold)
+            seconds = candidate["end_sec"].sub(candidate["start_sec"]).sum()
+            budget = seconds / duration if duration else 0.0
+            choices.append((abs(budget - target_budget), threshold, candidate))
+        empty_threshold = float(np.nextafter(breakpoints[-1], np.inf))
+        choices.append((target_budget, empty_threshold, make_clips(empty_threshold)))
+        _, threshold, clips = min(choices, key=lambda item: (item[0], item[1]))
+    else:
+        threshold = float(bundle["threshold"])
+        clips = make_clips(threshold)
+
+    clips["length_sec"] = clips["end_sec"] - clips["start_sec"]
+    clips["start"] = clips["start_sec"].apply(format_timestamp)
+    clips["end"] = clips["end_sec"].apply(format_timestamp)
+    clips.attrs["threshold"] = threshold
+    clips.attrs["target_budget"] = target_budget
+    return clips, duration, len(starts)
 
 
 def _fully_contained(interval: tuple[float, float], candidates: list[tuple[float, float]]) -> bool:
@@ -340,8 +409,6 @@ def build_targets(df: pd.DataFrame, labels: dict[int, list[tuple[float, float]]]
 
 def load_best_params(results_path: Path) -> dict[str, object]:
     """Load the winning parameter dictionary written by tune_model.py."""
-    import ast
-
     results = pd.read_csv(results_path)
     if results.empty or "params" not in results.columns:
         raise ValueError(f"No tuned parameters found in {results_path}")
@@ -366,3 +433,150 @@ def load_best_candidate_config(results_path: Path) -> dict[str, float]:
         )
     row = results.iloc[0]
     return {"lookback": float(row["lookback"]), "postroll": float(row["postroll"]), "merge_gap": float(row["merge_gap"])}
+
+
+def save_model_artifact(model: XGBClassifier, metadata: dict, model_path: Path) -> None:
+    """Save the trained model and inference metadata sidecar."""
+    model_path = Path(model_path)
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    model.save_model(model_path)
+    with model_path.with_suffix(".json").open("w", encoding="utf-8") as config_file:
+        json.dump(metadata, config_file, indent=2)
+
+
+def load_model_artifact(model_path: str | Path) -> dict:
+    """Load a saved model and its inference metadata sidecar."""
+    model_path = Path(model_path)
+    model = XGBClassifier()
+    model.load_model(model_path)
+    with model_path.with_suffix(".json").open(encoding="utf-8") as config_file:
+        metadata = json.load(config_file)
+    return {"model": model, **metadata}
+
+
+@dataclass
+class TrainingData:
+    feature_matrix: np.ndarray
+    targets: np.ndarray
+    groups: np.ndarray
+    starts: np.ndarray
+    labels: dict
+    raw_durations: dict
+
+
+def load_training_data(args) -> TrainingData:
+    """Load and split the feature/label inputs used during parameter tuning."""
+    df = load_features(args.features)
+    refined_labels = load_labels(args.labels)
+    clip_labels = load_labels(args.labels, start_column="clip_start_sec", end_column="clip_end_sec")
+    raw_durations = load_raw_durations(args.matches)
+    targets = build_targets(df, refined_labels)
+    selected_features = required_feature_columns(df)
+    print(f"Using {len(selected_features)} features")
+
+    groups = df["match_id"].to_numpy()
+    holdout_match_ids = set(TEST_MATCH_IDS)
+    missing_match_ids = holdout_match_ids - set(groups.astype(int))
+    if missing_match_ids:
+        raise RuntimeError(f"Test matches are missing from features: {sorted(missing_match_ids)}")
+    train_idx = np.flatnonzero(~np.isin(groups, list(holdout_match_ids)))
+    if not train_idx.size:
+        raise RuntimeError("Need training matches outside the test set")
+    print(f"Training windows: {len(train_idx)} across {len(np.unique(groups[train_idx]))} matches")
+    print(f"Test matches (excluded from tuning): {sorted(holdout_match_ids)}")
+    return TrainingData(
+        feature_matrix=df[selected_features].iloc[train_idx].to_numpy(),
+        targets=targets[train_idx], groups=groups[train_idx],
+        starts=df["start_sec"].to_numpy()[train_idx], labels=clip_labels,
+        raw_durations=raw_durations,
+    )
+
+
+def candidate_window_combos(candidate_grid: dict[str, list[float]]) -> list[dict[str, float]]:
+    """Expand a candidate-window grid into its parameter combinations."""
+    keys = list(candidate_grid)
+    return [dict(zip(keys, values)) for values in itertools.product(*(candidate_grid[key] for key in keys))]
+
+
+def best_candidate_window(groups, starts, probabilities, labels, raw_durations, combos):
+    """Choose the candidate window with the best partial recall-budget AUC."""
+    best_combo, best_auc = combos[0], -np.inf
+    for combo in combos:
+        budgets, recalls, _ = recall_budget_curve(
+            groups, starts, probabilities, labels, combo["merge_gap"],
+            raw_durations=raw_durations, lookback=combo["lookback"], postroll=combo["postroll"],
+        )
+        auc = curve_partial_auc(budgets, recalls, *BUDGET_BAND)
+        if auc > best_auc:
+            best_combo, best_auc = combo, auc
+    return best_combo, best_auc
+
+
+def score_candidate(sampled_params, data, args, candidate_combos):
+    """Fit grouped OOF models, then score this candidate's best window settings."""
+    pooled_probabilities, held_positions = pooled_oof_predict(
+        data.feature_matrix, data.targets, data.groups, sampled_params, args.random_state, args.cv,
+    )
+    best_combo, pooled_auc = best_candidate_window(
+        data.groups, data.starts, pooled_probabilities, data.labels, data.raw_durations, candidate_combos,
+    )
+    best_budgets, best_recalls, _ = recall_budget_curve(
+        data.groups, data.starts, pooled_probabilities, data.labels, best_combo["merge_gap"],
+        raw_durations=data.raw_durations, lookback=best_combo["lookback"], postroll=best_combo["postroll"],
+    )
+    fold_aucs = []
+    for held_pos in held_positions:
+        budgets, recalls, _ = recall_budget_curve(
+            data.groups[held_pos], data.starts[held_pos], pooled_probabilities[held_pos],
+            data.labels, best_combo["merge_gap"], raw_durations=data.raw_durations,
+            lookback=best_combo["lookback"], postroll=best_combo["postroll"],
+        )
+        fold_aucs.append(curve_partial_auc(budgets, recalls, *BUDGET_BAND))
+    return {
+        "params": sampled_params, "lookback": best_combo["lookback"],
+        "postroll": best_combo["postroll"], "merge_gap": best_combo["merge_gap"],
+        "mean_test_score": pooled_auc, "std_test_score": float(np.std(fold_aucs)),
+        "full_auc": curve_auc(best_budgets, best_recalls),
+        "_band_points": count_points_in_band(best_budgets, *BUDGET_BAND),
+    }
+
+
+def run_search(data, args, candidate_combos) -> pd.DataFrame:
+    """Run randomized model search and return rows sorted by partial AUC."""
+    results_rows = []
+    sampler = ParameterSampler(MODEL_PARAM_DISTRIBUTIONS, n_iter=args.n_iter, random_state=args.random_state)
+    for candidate_number, sampled_params in enumerate(sampler, start=1):
+        result = score_candidate(sampled_params, data, args, candidate_combos)
+        result["candidate_number"] = candidate_number
+        results_rows.append(result)
+        print(f"Candidate {candidate_number}/{args.n_iter}: partial recall-budget AUC (band 25-40%)="
+              f"{result['mean_test_score']:.3f} (lookback={result['lookback']:.0f}s "
+              f"postroll={result['postroll']:.0f}s merge_gap={result['merge_gap']:.0f}s)")
+        if candidate_number == 1:
+            band_points = result["_band_points"]
+            print(f"Best combo curve points in budget band 25-40%: {band_points}")
+            if band_points < 15:
+                print("[WARNING] Fewer than 15 curve points fall in the budget band; increase CURVE_N_THRESHOLDS.")
+    results = pd.DataFrame(results_rows).sort_values(
+        ["mean_test_score", "candidate_number"], ascending=[False, True]
+    ).reset_index(drop=True)
+    results["rank_test_score"] = np.arange(1, len(results) + 1)
+    return results
+
+
+def select_threshold(groups, starts, probabilities, labels, raw_durations,
+                     merge_gap, lookback, postroll, budget_limit):
+    """Choose the OOF threshold whose candidate budget is closest to target."""
+    if not 0.0 <= budget_limit <= 1.0:
+        raise ValueError(f"budget must be between 0 and 1, got {budget_limit}")
+    budgets, recalls, thresholds = recall_budget_curve(
+        groups, starts, probabilities, labels, merge_gap, raw_durations=raw_durations,
+        lookback=lookback, postroll=postroll, n_thresholds=FINAL_CURVE_N_THRESHOLDS,
+    )
+    eligible = np.flatnonzero(budgets > 1e-12)
+    if not eligible.size:
+        raise RuntimeError("No non-empty threshold is available; adjust the candidate-window settings.")
+    distance = np.abs(budgets[eligible] - budget_limit)
+    closest = eligible[np.isclose(distance, distance.min())]
+    position = int(closest[np.argmax(recalls[closest])])
+    return float(thresholds[position]), float(recalls[position]), float(budgets[position])

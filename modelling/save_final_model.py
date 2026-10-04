@@ -30,7 +30,7 @@ from pathlib import Path
 import numpy as np
 
 from constants import (
-    FEATURES_DIR, FINAL_CURVE_N_THRESHOLDS, LABELS_PATH, MATCHES_PATH, TARGET_BUDGET,
+    FEATURES_DIR, LABELS_PATH, MATCHES_PATH, TARGET_BUDGET,
     MODEL_PATH, MODEL_RESULTS_PATH, PCA_DIR, RANDOM_STATE,
 )
 
@@ -38,38 +38,10 @@ from modelling.functions import (
     STRIDE_SEC, TEST_MATCH_IDS, WINDOW_SEC, YAMNET_SCORE_INDICES, build_model,
     build_targets, load_best_candidate_config, load_best_params, load_features,
     load_labels, load_raw_durations, pooled_oof_predict, recall_budget_curve,
-    required_feature_columns, train_test_split_by_match_id,
+    required_feature_columns, train_test_split_by_match_id, save_model_artifact,
+    select_threshold,
 )
-from modelling.model_artifact import save_model_artifact
 
-
-def select_threshold(
-    groups: np.ndarray,
-    starts: np.ndarray,
-    probabilities: np.ndarray,
-    labels: dict,
-    raw_durations: dict,
-    merge_gap: float,
-    lookback: float,
-    postroll: float,
-    budget_limit: float,
-) -> tuple[float, float, float]:
-    """Select the operating point whose budget is closest to the requested budget."""
-    if not 0.0 <= budget_limit <= 1.0:
-        raise ValueError(f"budget must be between 0 and 1, got {budget_limit}")
-    budgets, recalls, thresholds = recall_budget_curve(
-        groups, starts, probabilities, labels, merge_gap,
-        raw_durations=raw_durations, lookback=lookback, postroll=postroll,
-        n_thresholds=FINAL_CURVE_N_THRESHOLDS,
-    )
-    # Exclude the budget=0 anchor: it must never become a deployable threshold.
-    eligible = np.flatnonzero(budgets > 1e-12)
-    if not eligible.size:
-        raise RuntimeError("No non-empty threshold is available; adjust the candidate-window settings.")
-    distance = np.abs(budgets[eligible] - budget_limit)
-    closest = eligible[np.isclose(distance, distance.min())]
-    position = int(closest[np.argmax(recalls[closest])])  # tie-break on recall
-    return float(thresholds[position]), float(recalls[position]), float(budgets[position])
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

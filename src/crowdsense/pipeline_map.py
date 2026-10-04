@@ -101,7 +101,7 @@ NODES = [
         title="extract_features", sub="YAMNet scores + 16 PCA",
         summary="Runs YAMNet over each match's audio at its native cadence (0.96 s window every 0.48 s), "
                 "keeps 11 AudioSet score columns, and compresses the 1024-dim embedding to 16 PCA components.",
-        where=["preprocessing/extract_features.py", "modelling/inference.py"],
+        where=["preprocessing/extract_features.py", "preprocessing/functions.py"],
         notes=["PCA is fit on training matches only. The 8 test matches are transformed with that basis, "
                "never used to fit it.",
                "The fitted PCA is saved to pca_transform.npz so the demo can reuse the exact same projection.",
@@ -184,7 +184,7 @@ NODES = [
         title="save_final_model", sub="OOF threshold + train",
         summary="Picks a decision threshold from out-of-fold predictions so the candidate budget lands "
                 "closest to TARGET_BUDGET, fits the model on all non-test matches, and saves it with its settings.",
-        where=["modelling/save_final_model.py", "modelling/model_artifact.py"],
+        where=["modelling/save_final_model.py", "modelling/functions.py"],
         notes=["The test matches are excluded from both the threshold selection and the final fit.",
                "It reads the training features and tuned settings, then supplies the model artifact to "
                "both test evaluation and the dashboard."],
@@ -218,7 +218,7 @@ NODES = [
         title="Streamlit demo", sub="YAMNet + XGBoost",
         summary="Scores every audio frame with the model bundle, then turns the scores into candidate "
                 "windows. Full demo extracts features from the audio first; Quick demo uses the cached features.",
-        where=["src/crowdsense/views/dashboard.py", "modelling/inference.py"],
+        where=["src/crowdsense/views/dashboard.py", "src/crowdsense/demo_functions.py"],
         notes=["The threshold is searched per match so the candidate footage lands near the 30% budget. "
                "The threshold stored in the bundle is only a fallback."],
     ),

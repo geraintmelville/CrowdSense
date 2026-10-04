@@ -1,7 +1,7 @@
 import numpy as np
 from xgboost import XGBClassifier
 
-from modelling.model_artifact import load_model_artifact, save_model_artifact
+from modelling.functions import load_model_artifact, save_model_artifact
 
 
 def test_native_model_round_trip_preserves_predictions_and_metadata(tmp_path):

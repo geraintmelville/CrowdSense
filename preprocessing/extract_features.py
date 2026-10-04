@@ -28,7 +28,6 @@ import tempfile
 
 import numpy as np
 import pandas as pd
-from sklearn.decomposition import IncrementalPCA
 
 from constants import (
     CLIP_DATABASE_PATH, FEATURES_DIR, PCA_BATCH_SIZE, PCA_COMPONENTS,
@@ -39,9 +38,10 @@ from constants import (
 from preprocessing.functions import (
     build_feature_dataframe,
     extract_yamnet_match,
+    fit_pca,
+    load_yamnet_model,
     list_matches,
 )
-from modelling.inference import load_yamnet_model
 
 # --- Configuration ----------------------------------------------------------
 
@@ -50,41 +50,6 @@ from modelling.inference import load_yamnet_model
 # aggregation across frames.
 WINDOW_SEC = YAMNET_WINDOW_SEC
 STRIDE_SEC = YAMNET_STRIDE_SEC
-
-
-def extract_match(raw_filename, audio_dir, score_indices=SCORE_INDICES, model=None):
-    """Return (starts, score_features, embeddings) for one match's audio file.
-
-    No window aggregation: WINDOW_SEC/STRIDE_SEC match YAMNet's native frame
-    cadence exactly, so each raw frame IS a window. We just slice the score
-    columns we care about and pass the embeddings straight through to PCA.
-    """
-    return extract_yamnet_match(raw_filename, audio_dir, score_indices, model)
-
-
-def fit_pca(embedding_paths, n_components, batch_size):
-    """Fit IncrementalPCA over saved TRAIN-only window embeddings, in bounded batches."""
-    total_rows = sum(np.load(path, mmap_mode="r").shape[0] for path in embedding_paths)
-    if total_rows < n_components:
-        raise ValueError(f"Need at least {n_components} training windows to fit PCA; found {total_rows}")
-    batch_count = max(1, int(np.ceil(total_rows / batch_size)))
-    target_batch_size = total_rows // batch_count
-    pca = IncrementalPCA(n_components=n_components, batch_size=batch_size)
-    pending = []
-    pending_rows = 0
-    for embedding_path in embedding_paths:
-        embeddings = np.load(embedding_path)
-        pending.append(embeddings)
-        pending_rows += len(embeddings)
-        while pending_rows >= target_batch_size:
-            combined = np.concatenate(pending)
-            pca.partial_fit(combined[:target_batch_size])
-            combined = combined[target_batch_size:]
-            pending = [combined] if len(combined) else []
-            pending_rows = len(combined)
-    if pending_rows:
-        pca.partial_fit(np.concatenate(pending))
-    return pca
 
 
 def main():
@@ -126,7 +91,7 @@ def main():
         for index, (match_id, raw_filename) in enumerate(matches):
             started = time.time()
             print(f"[{index + 1}/{len(matches)}] extracting YAMNet features: match {match_id}", flush=True)
-            result = extract_match(raw_filename, args.audio_dir, model=model)
+            result = extract_yamnet_match(raw_filename, args.audio_dir, model=model)
             if result is None:
                 continue
             starts, score_rows, embedding_rows = result
