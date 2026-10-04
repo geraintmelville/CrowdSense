@@ -188,6 +188,34 @@ def render_full_demo(bundle: dict, youtube_url: str) -> None:
 
 def render_demo(bundle: dict) -> None:
     st.title("Audio Highlight Candidate Finder")
+    st.markdown(
+        """
+        CrowdSense scores audio from a prepared futsal match and groups high-scoring windows
+        into candidate clips for an editor to review. Choose between two ways to prepare the
+        audio:
+
+        - **Quick demo** scores cached features from `demo/features/` and skips YAMNet feature
+          extraction. Its duration estimate uses the final cached frame start plus the model
+          window, so it may differ slightly from the source audio duration.
+        - **Full demo** extracts YAMNet features from the matching full-match WAV in
+          `demo/raw/audio/` while running analysis. Prepare the WAV from a source MP4 in
+          `demo/raw/video/` with `python -m demo.prepare_demo`.
+
+        `modelling/inference.py` applies the saved PCA projection and scores each audio window
+        with the XGBoost model in `model.ubj` and `model.json`. Quick demo scores cached
+        features; Full demo computes the same features and scores from the selected audio. The
+        PCA projection is reused and never refit during inference. Windows are scored every
+        0.48 seconds; those at or above the saved threshold are padded with the configured
+        lookback and postroll, then merged when they are within `merge_gap` of one another.
+        This produces a short list of candidate clips instead of a score for each window.
+
+        Review the merged timestamps and select a candidate for in-page playback. Set
+        `CROWDSENSE_DEMO_YOUTUBE_URL` to the selected match's YouTube URL to show timestamped
+        links and playback. Timestamps are relative to the start of the selected audio, so the
+        video needs to start at the same point. This low-traffic proof of concept works with
+        prepared match data; it does not provide match uploads or clip export.
+        """
+    )
     mode = st.radio("Demo mode", ["Quick demo", "Full demo"], horizontal=True)
     youtube_url = os.environ.get("CROWDSENSE_DEMO_YOUTUBE_URL", DEFAULT_DEMO_YOUTUBE_URL).strip()
     if mode == "Quick demo":

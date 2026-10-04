@@ -30,12 +30,18 @@ DEMO_PCA_PATH = PCA_DIR / "pca_transform.npz"
 DEMO_START_OFFSET_SEC = 18 * 60 + 4
 
 
-def _renormalize_demo_clip_timestamps(clips_csv_path: Path) -> None:
-    """Rebase full-match clip timestamps to the demo video, which starts at 18:04."""
+def _renormalize_demo_clip_timestamps(
+    clips_csv_path: Path,
+    matches_csv_path: Path,
+    start_offset_sec: float = DEMO_START_OFFSET_SEC,
+) -> None:
+    """Rebase labels to the demo media and clip them to its actual duration."""
     if not clips_csv_path.exists():
         return
 
     clips = pd.read_csv(clips_csv_path)
+    matches = pd.read_csv(matches_csv_path)
+    durations = matches.set_index("match_id")["audio_length_sec"].astype(float)
 
     def to_seconds(timestamp: str) -> int:
         return sum(
@@ -43,19 +49,21 @@ def _renormalize_demo_clip_timestamps(clips_csv_path: Path) -> None:
             for part, factor in zip(timestamp.split(":"), (3600, 60, 1))
         )
 
-    clip_starts = clips["timestamp_formatted"].map(to_seconds)
-    clip_ends = clip_starts + clips["length_sec"].astype(float)
-    overlaps_demo = clip_ends > DEMO_START_OFFSET_SEC
-    clips = clips.loc[overlaps_demo].copy()
-    clip_starts = clip_starts.loc[overlaps_demo]
-    clip_ends = clip_ends.loc[overlaps_demo]
-
-    relative_starts = (clip_starts - DEMO_START_OFFSET_SEC).clip(lower=0)
-    clips["timestamp_formatted"] = relative_starts.map(
-        lambda seconds: f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}"
+    clips["_start_sec"] = clips["timestamp_formatted"].map(to_seconds).astype(float)
+    clips["_end_sec"] = clips["_start_sec"] + clips["length_sec"].astype(float)
+    clips["_demo_start_sec"] = (clips["_start_sec"] - start_offset_sec).clip(lower=0)
+    clips["_demo_end_sec"] = clips.apply(
+        lambda row: min(row["_end_sec"] - start_offset_sec,
+                        durations.get(row["match_id"], float("inf"))),
+        axis=1,
     )
-    # Clips crossing the trim point should only cover the part present in the demo.
-    clips["length_sec"] = clip_ends - clip_starts.clip(lower=DEMO_START_OFFSET_SEC)
+    # Keep only the part of each labelled span that overlaps the trimmed media.
+    clips = clips[clips["_demo_end_sec"] > clips["_demo_start_sec"]].copy()
+    clips["timestamp_formatted"] = clips["_demo_start_sec"].map(
+        lambda seconds: f"{int(seconds) // 3600:02d}:{int(seconds) % 3600 // 60:02d}:{int(seconds) % 60:02d}"
+    )
+    clips["length_sec"] = clips["_demo_end_sec"] - clips["_demo_start_sec"]
+    clips.drop(columns=["_start_sec", "_end_sec", "_demo_start_sec", "_demo_end_sec"], inplace=True)
     clips.to_csv(clips_csv_path, index=False)
 
 
@@ -73,7 +81,7 @@ def prepare_demo() -> None:
         matches_csv_path=DEMO_MATCHES_PATH,
         clips_csv_path=DEMO_CLIPS_PATH,
     )
-    _renormalize_demo_clip_timestamps(DEMO_CLIPS_PATH)
+    _renormalize_demo_clip_timestamps(DEMO_CLIPS_PATH, DEMO_MATCHES_PATH)
 
     pca_data = np.load(DEMO_PCA_PATH)
     model = load_yamnet_model()

@@ -1,2 +1,2 @@
 window_sec,stride_sec,yamnet_score_indices,yamnet_embedding_dimensions,pca_components,pca_transform_path
-0.96,0.48,"6,9,11,35,61,62,64,63,65,58,10",1024,16,data\processed\features\pca\pca_transform.npz
+0.96,0.48,"6,9,11,35,61,62,64,63,65,58,10",1024,16,C:\Users\gerai\df-frontier\CrowdSense\data\processed\features\pca\pca_transform.npz

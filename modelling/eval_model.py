@@ -98,10 +98,10 @@ def main() -> None:
     axis.fill_between(budgets, recalls, alpha=0.12, color="#1f77b4")
     axis.axvspan(*BUDGET_BAND, color="#ffbf00", alpha=0.18, label="Tuning band (25-40%)")
     axis.scatter([operating_budget], [operating_recall], color="#d62728", zorder=3,
-                 label="Training-selected threshold")
+                 label="Headline metric threshold")
     axis.set(
         title="Recall-budget curve (held-out test set)",
-        xlabel="Candidate footage budget",
+        xlabel="Budget",
         ylabel="Recall",
         xlim=(0, 1),
         ylim=(0, 1),

@@ -13,7 +13,7 @@ V = "src/crowdsense/views"
 
 pages = {
     "Welcome": [
-        st.Page(f"{V}/overview.py", title="Welcome & Pipeline Map", icon=":material/home:"),
+        st.Page(f"{V}/overview.py", title="Welcome", icon=":material/home:"),
     ],
     "Demo": [
         st.Page(f"{V}/dashboard.py", title="Highlight Finder Demo", icon=":material/live_tv:"),
@@ -22,8 +22,7 @@ pages = {
         st.Page(f"{V}/preprocessing.py", title="Preprocessing", icon=":material/database:"),
         st.Page(f"{V}/metrics.py", title="Metrics", icon=":material/monitoring:"),
         st.Page(f"{V}/modelling.py", title="Modelling", icon=":material/model_training:"),
-        st.Page(f"{V}/results.py", title="Results", icon=":material/bar_chart:"),
-        st.Page(f"{V}/inference.py", title="Inference & Demo Flow", icon=":material/account_tree:"),
+        st.Page(f"{V}/performance.py", title="Performance", icon=":material/bar_chart:"),
     ],
 }
 

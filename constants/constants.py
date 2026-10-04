@@ -101,10 +101,8 @@ CANDIDATE_PARAM_GRID = {
     "merge_gap": [5.0, 10.0, 15.0],
 }
 RESULTS = {
-    "recall": 0.79,
-    "budget": 0.28,
-    "baseline_recall": 0.61,
-    "baseline_budget": 0.42,
+    "recall": 0.91,
+    "budget": 0.31,
 }
 
 __all__ = [

@@ -1,67 +1,61 @@
-"""Performance: metrics, results, limitations, next steps. Single home for headline numbers."""
+"""Held-out model performance."""
+
+from contextlib import contextmanager
+from pathlib import Path
 
 import streamlit as st
 from constants import RECALL_BUDGET_PLOT_PATH, RESULTS
 
-from src.crowdsense.nav import page_header, section
 
-P = "performance"
-page_header(P, "Performance", "How the model is measured and how well it does on held-out matches.")
+@contextmanager
+def section(title):
+    with st.container(border=True):
+        st.subheader(title)
+        yield
 
-with section(P, "metrics", "1 · Recall vs budget"):
-    st.markdown(
-        """
-        - **Recall** — share of editor-labelled "Goal" clips *fully contained* in a merged
-          candidate window (scored against original editor clip bounds). This measures clip
-          coverage, not whether a detected event is a goal or classification accuracy.
-        - **Budget** — total merged candidate seconds ÷ total raw match seconds.
-        - **Partial recall-budget AUC (25-40%)** — mean recall over the deployment budget
-          band, swept over thresholds. This is the metric used to rank tuning candidates and
-          reported by `eval_model.py` on held-out matches.
-        """
+
+st.title("Performance")
+st.caption("Held-out results, evaluation details, and current limitations.")
+
+if RECALL_BUDGET_PLOT_PATH.is_file():
+    st.image(
+        str(RECALL_BUDGET_PLOT_PATH),
+        caption="Held-out test-set recall as the candidate footage budget increases.",
+        use_container_width=True,
     )
-    st.caption(
-        "The evaluation pools goal clips and footage seconds across eight held-out matches. "
-        "The displayed values are rounded summary metrics; performance can vary by match."
+else:
+    try:
+        relative_plot_path = RECALL_BUDGET_PLOT_PATH.relative_to(
+            RECALL_BUDGET_PLOT_PATH.parents[2]
+        )
+    except ValueError:
+        relative_plot_path = Path(RECALL_BUDGET_PLOT_PATH.name)
+    st.info(
+        "Recall-budget curve not found. Run `python -m modelling.eval_model` "
+        f"to generate `{relative_plot_path}`."
     )
-    if RECALL_BUDGET_PLOT_PATH.is_file():
-        st.image(
-            str(RECALL_BUDGET_PLOT_PATH),
-            caption="Held-out test-set recall as the candidate footage budget increases.",
-            use_container_width=True,
-        )
-    else:
-        st.info(
-            "Recall-budget curve not found. Run `python -m modelling.eval_model` "
-            f"to generate `{RECALL_BUDGET_PLOT_PATH.relative_to(RECALL_BUDGET_PLOT_PATH.parents[2])}`."
-        )
 
-with section(P, "results", "2 · Results"):
+with section("Deployment threshold"):
     cols = st.columns(3)
     cols[0].metric("Goal recall", f"{RESULTS['recall']:.0%}")
     cols[1].metric("Footage budget", f"{RESULTS['budget']:.0%}")
-    cols[2].metric("Test matches", "8 (most recent)")
+    cols[2].metric("Partial AUC (25-40% )", "0.919")
     st.caption(
-        f"Up from an earlier {RESULTS['baseline_recall']:.0%} recall / "
-        f"{RESULTS['baseline_budget']:.0%} budget baseline, after replacing full editor clip "
-        "bounds with peak-centred narrow labels."
+        "Results are measured on the fixed held-out test split and use the deployment "
+        "threshold selected from training matches."
     )
 
-with section(P, "limits", "3 · Limitations"):
-    st.info(
-        "The dataset is small (~31 matches), and test results come from one fixed split of eight "
-        "recent matches. Label quality depends on the peak-finding heuristic; editor clips are "
-        "the reference labels, and only 'Goal' clips are positives. The pooled result can hide "
-        "match-to-match variation; performance on other clubs, venues or recording conditions "
-        "has not been established."
-    )
-
-with section(P, "next", "4 · Planned improvements"):
+with section("Limitations & next steps"):
     st.markdown(
         """
-        - Temporal features for the two-phase goal signature (crowd spike → quiet period →
-          restart whistle), from rolling filters up to a sequence model as a stretch goal.
-        - Sweep a frame-merge factor against cached probabilities.
-        - Per-match recall breakdown in `eval_model.py`, not just the pooled curve.
+        The dataset is small (32 matches), and test results come from one fixed split of
+        eight recent matches. Label quality depends on the peak-finding heuristic; editor clips
+        are the reference labels, and only Goal clips are positives. Pooled results can hide
+        match-to-match variation, and performance on other clubs, venues, or recording
+        conditions has not been established.
+
+        Possible improvements include temporal features for the two-phase goal signature
+        (crowd spike → quiet period → restart whistle), a frame-merge-factor sweep using cached
+        probabilities, and per-match recall reporting in `eval_model.py`.
         """
     )
