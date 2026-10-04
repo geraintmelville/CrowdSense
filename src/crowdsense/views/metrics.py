@@ -42,7 +42,7 @@ with section("Recall"):
         """
         We look at each goal clip in a match, if it is wholly contained
         within a candidate window it is a true positive or a 'hit'. Recall is then, 
-        `n_hits / n_goals`. This measure how well the model preserves goals.
+        `n_hits / n_goals`. This measures how well the model preserves goals.
         
         Note that this is a strict metric since a candidate window may contain the relevant
         footage for a goal, but if it misses any frames from the editor's cut it is counted
@@ -100,7 +100,7 @@ with section("25-40% band"):
     st.markdown(
         """
     In order to produce useful outputs, we are aiming for a budget of ~33%. Therefore, in practice
-    we only evaluate the are under the curve between 25-40%. This is the metric that is used in
+    we only evaluate the area under the curve between 25-40%. This is the metric that is used in
     model tuning. To report headline metrics, as in the Welcome page, we choose a fixed threshold 
     that aims for 33% budget and report the corresponding recall. Due to the discrete nature of this
      approach (we have distinct frames of audio), we cannot necessarily find a threshold that

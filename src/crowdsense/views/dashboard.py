@@ -29,6 +29,14 @@ def load_demo_yamnet_model():
     return load_yamnet_model()
 
 
+@st.cache_data(show_spinner=False)
+def cached_score_match(audio_path: str, _bundle: dict):
+    """Cache full-match inference so reruns and visitors reuse the fixed demo result."""
+    return score_match(
+        Path(audio_path), _bundle, yamnet_model=load_demo_yamnet_model()
+    )
+
+
 def _render_results(result: dict, youtube_url: str) -> None:
     clips = result["clips"]
     goals = goal_intervals(result["result_key"])
@@ -143,9 +151,7 @@ def render_full_demo(bundle: dict, youtube_url: str) -> None:
     if st.button("Extract features and run analysis", type="primary"):
         try:
             with st.spinner("Extracting YAMNet features from the full-match audio and scoring..."):
-                clips, duration, n_windows = score_match(
-                    audio_path, bundle, yamnet_model=load_demo_yamnet_model()
-                )
+                clips, duration, n_windows = cached_score_match(str(audio_path), bundle)
         except (OSError, RuntimeError, ValueError) as error:
             st.error(f"Full demo failed: {error}")
             return

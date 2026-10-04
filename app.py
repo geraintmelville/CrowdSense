@@ -1,6 +1,11 @@
 """Root entry point for the Futsal Analytics Streamlit application."""
 
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 
 st.set_page_config(

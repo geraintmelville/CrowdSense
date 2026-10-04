@@ -21,7 +21,7 @@ if RECALL_BUDGET_PLOT_PATH.is_file():
     st.image(
         str(RECALL_BUDGET_PLOT_PATH),
         caption="Held-out test-set recall as the candidate footage budget increases.",
-        use_container_width=True,
+        width="stretch",
     )
 else:
     try:

@@ -6,7 +6,6 @@ import shutil
 import wave
 from functools import lru_cache
 from math import gcd
-import os
 
 from collections import defaultdict
 from pathlib import Path
@@ -46,14 +45,11 @@ def timestamp_to_seconds(timestamp_formatted: str) -> int:
 
 @lru_cache(maxsize=1)
 def load_yamnet_model():
-    """Load YAMNet once for callers that do not provide a model."""
-    cache_dir = Path(os.environ.setdefault(
-        "TFHUB_CACHE_DIR", str(Path.home() / ".cache" / "tensorflow_hub")
-    ))
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    import tensorflow_hub as hub
+    """Load the vendored YAMNet SavedModel once for callers without a model."""
+    import tensorflow as tf
 
-    return hub.load("https://tfhub.dev/google/yamnet/1")
+    model_dir = Path(__file__).resolve().parents[1] / "models" / "yamnet"
+    return tf.saved_model.load(str(model_dir))
 
 
 def extract_yamnet_features_streaming(audio_path, include_embeddings=True, model=None):

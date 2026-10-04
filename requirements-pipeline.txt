@@ -1,3 +1,3 @@
 # Full data preparation, feature extraction, model training/evaluation, and app.
-# Pipeline feature extraction and the app's Full demo share the YAMNet runtime.
+# Pipeline feature extraction and the app's Full demo load the vendored YAMNet SavedModel.
 -r requirements.txt

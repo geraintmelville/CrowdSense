@@ -37,7 +37,7 @@ with section("`tune_model.py`"):
         `XGBoost` has various hyperparameters, changing these values changes how the model
         learns, this allows the model to be used on a wide range of machine-learning
         tasks. There are also the previously mentioned parameters, `lookback`, `postroll`
-        and `merge_gap` which govern how candidate windows are built from `XGBoost` ouputs.
+        and `merge_gap` which govern how candidate windows are built from `XGBoost` outputs.
 
         In order to find the optimal values for the hyperparameters, we conduct a 'random grid-search'.
         We set out a grid of possible values we want to check, then 
@@ -116,7 +116,7 @@ with section("`tune_model.py`"):
 with section("`save_final_model.py`"):
     st.markdown(
         """
-        This script take the best values as described above, and trains a model on the full 24 match
+        This script takes the best values as described above, and trains a model on the full 24 match
         training set. This model is saved as `model.ubj` with a companion
         `model.json`. The artifact records the threshold, target budget, feature columns,
         YAMNet score indices, window and stride, PCA components and mean, and candidate-window

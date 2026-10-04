@@ -35,7 +35,7 @@ with section("`build_clip_database.py`"):
 with section("`extract_audio.py`"):
     st.markdown(
         """
-        This script runs `ffmpeg` on mp4s, extract the audio into mono 22.05 kHz PCM WAV files.
+        This script runs `ffmpeg` on mp4s to extract the audio into mono 22.05 kHz PCM WAV files.
         It also checks the length of the audio against the match length in
         `matches.csv` and logs any discrepancies.
         """
@@ -58,13 +58,13 @@ with section("`extract_features.py`"):
         scores (Shout, Yell, Screaming, Whistling, Cheering,
         Applause, Crowd, Chatter, Hubbub, Clapping, Children shouting) plus the embedding.
 
-        The YAMNet embedding a 1024-dimensional vector, in order to reduce the size of our feature set,
+        The YAMNet embedding is a 1024-dimensional vector. In order to reduce the size of our feature set,
         we apply PCA, which essentially compresses the data. We reduce the dimensionality to 16 components with `IncrementalPCA`, which keeps ~83%
         of the variance (information). It is fit on **training matches only** and the parameters are saved to 
         `pca_transform.npz` to be reused on test matches and the demo. It is never refit so no test 
         embedding structure leaks into the features.
 
-        Th output is a parquet file per match, with one row per YAMNet frame, and columns
+        The output is a parquet file per match, with one row per YAMNet frame, and columns
          consisting of the 11 class scores and the 16 PCA components.
 
         [TensorFlow's YAMNet guide](https://www.tensorflow.org/tutorials/audio/transfer_learning_audio)
@@ -74,7 +74,7 @@ with section("`extract_features.py`"):
 with section("`extract_labels.py`"):
     st.markdown(
         """
-        We are aiming to build a model that identidies goals based on the crowd spike after a goal.
+        We are aiming to build a model that identifies goals based on the crowd spike after a goal.
         In order to train a model to do this, we must manually identify these spikes to 
         provide labels it can learn from. If instead we gave it the whole clip, the signal 
          from the crowd spike would be diluted by the rest of the clip. To do this we:
@@ -83,7 +83,7 @@ with section("`extract_labels.py`"):
         2. Sum the Cheering + Crowd + Applause scores per frame and find the peak frame.
         3. Define a 3s window centred on that peak, that serves as a positive label. 
         
-        We ouput `labels.csv` which keeps both the positive windows (used for training targets) and the original
+        We output `labels.csv` which keeps both the positive windows (used for training targets) and the original
         clip bounds (used to evaluate model performance), plus the peak time and score for auditing.
         The heuristic assumes the strongest Cheering/Crowd/Applause peak is near the goal; it
         can miss quiet goals or select an unrelated loud reaction due to controversial decision or 
