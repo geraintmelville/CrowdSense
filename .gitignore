@@ -24,7 +24,7 @@ env/
 # Regenerable data artefacts
 data/modelling/predictions/
 data/raw/
-data/processed/features
+data/processed/features/096_048
 demo/raw/video/
 demo/raw/clips/
 test/
