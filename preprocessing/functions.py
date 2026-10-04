@@ -19,9 +19,9 @@ from sklearn.decomposition import IncrementalPCA
 import soundfile as sf
 from scipy.signal import resample_poly
 
-from constants import SCORE_INDICES, YAMNET_STRIDE_SEC
 from constants import (
-    YAMNET_CHUNK_SEC, YAMNET_LOOKAHEAD_SEC, YAMNET_SAMPLE_RATE,
+    SCORE_INDICES, YAMNET_CHUNK_SEC, YAMNET_LOOKAHEAD_SEC,
+    YAMNET_SAMPLE_RATE, YAMNET_STRIDE_SEC,
 )
 
 CLIP_FILENAME_REGEX = re.compile(r"^(?P<clip_num>\d+)\s+(?P<timestamp>\d{6})_-_(?P<desc>.+?)\.[a-zA-Z0-9]+$")
@@ -36,6 +36,12 @@ ZIP_FILENAME_REGEX = re.compile(
     r"^(?P<teams>.+?)(?:[\s_-]*highlights[\s_-]*)?(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})\.zip$",
     re.IGNORECASE,
 )
+
+
+def timestamp_to_seconds(timestamp_formatted: str) -> int:
+    """Convert an ``HH:MM:SS`` timestamp to seconds."""
+    hours, minutes, seconds = (int(part) for part in timestamp_formatted.split(":"))
+    return hours * 3600 + minutes * 60 + seconds
 
 
 @lru_cache(maxsize=1)

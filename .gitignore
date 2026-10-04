@@ -16,13 +16,18 @@ dist/
 venv/
 env/
 
-# Data artefacts -- raw footage, extracted audio, highlight zips, and
-# derived features/PCA are regenerable from the pipeline scripts.
-data/raw/
-data/processed/
+# Raw video and source clip archives are too large to keep in Git. Keep raw
+# audio (including the demo sample) available to the pipeline and demo.
+*.mp4
+*.zip
+
+# Regenerable data artefacts
 data/modelling/predictions/
-demo/generated/
-demo/raw/
+data/raw/
+data/processed/features
+demo/raw/video/
+demo/raw/clips/
+test/
 archive/
 
 # OS / editor

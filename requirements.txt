@@ -1,3 +1,4 @@
+# Runtime dependencies for the Streamlit app, including full-audio demo scoring.
 streamlit
 matplotlib
 numpy

@@ -2,10 +2,18 @@ import numpy as np
 
 from modelling.functions import (
     WINDOW_SEC,
-    coverage_metrics,
-    merge_intervals,
     recall_budget_curve,
 )
+
+
+def _merge_intervals_reference(intervals, merge_gap):
+    merged = []
+    for start, end in sorted(intervals):
+        if merged and start <= merged[-1][1] + merge_gap:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
 
 
 def test_vectorized_recall_budget_curve_matches_interval_reference():
@@ -13,8 +21,8 @@ def test_vectorized_recall_budget_curve_matches_interval_reference():
     starts = np.asarray([0.0, 0.48, 1.44, 3.36, 5.28, 0.0, 1.44])
     probabilities = np.asarray([0.9, 0.4, 0.8, 0.2, 0.6, 0.7, 0.3])
     labels = {
-        1: [(0.1, 1.2, "a"), (2.0, 2.5, "b"), (6.0, 7.0, "c")],
-        2: [(0.2, 1.0, "d"), (3.0, 3.5, "e")],
+        1: [(0.1, 1.2), (2.0, 2.5), (6.0, 7.0)],
+        2: [(0.2, 1.0), (3.0, 3.5)],
     }
     raw_durations = {1: 10.0, 2: 8.0}
     lookback, postroll, merge_gap = 1.0, 0.5, 0.25
@@ -30,7 +38,7 @@ def test_vectorized_recall_budget_curve_matches_interval_reference():
         seconds_total = 0.0
         for match_id in np.unique(groups):
             match_mask = groups == match_id
-            intervals = merge_intervals(
+            intervals = _merge_intervals_reference(
                 [
                     (max(0, start - lookback), start + WINDOW_SEC + postroll)
                     for start, probability in zip(starts[match_mask], probabilities[match_mask])
@@ -38,7 +46,14 @@ def test_vectorized_recall_budget_curve_matches_interval_reference():
                 ],
                 merge_gap,
             )
-            found, count, seconds = coverage_metrics(labels[int(match_id)], intervals)
+            match_labels = labels[int(match_id)]
+            found = sum(
+                any(candidate_start <= label_start and candidate_end >= label_end
+                    for candidate_start, candidate_end in intervals)
+                for label_start, label_end in match_labels
+            )
+            count = len(match_labels)
+            seconds = sum(end - start for start, end in intervals)
             found_total += found
             label_total += count
             seconds_total += seconds

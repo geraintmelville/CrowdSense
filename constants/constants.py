@@ -11,6 +11,8 @@ else:
 # Repository data layout.
 DATA_DIR = ROOT_DIR / "data"
 DEMO_DIR = ROOT_DIR / "demo"
+DEMO_CLIPS = DEMO_DIR / "clips.csv"
+DEMO_MATCH = DEMO_DIR / "matches.csv"
 DEMO_RAW_DIR = DEMO_DIR / "raw"
 DEMO_RAW_VIDEO_DIR = DEMO_RAW_DIR / "video"
 DEMO_RAW_AUDIO_DIR = DEMO_RAW_DIR / "audio"

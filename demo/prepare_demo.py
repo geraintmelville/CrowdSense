@@ -18,10 +18,12 @@ from constants import (
     YAMNET_STRIDE_SEC,
     YAMNET_WINDOW_SEC,
 )
+from crowdsense.demo_functions import format_timestamp
 from preprocessing.build_clip_database import process_all
 from preprocessing.extract_audio import extract_audio
 from preprocessing.functions import (
     build_feature_dataframe, extract_yamnet_match, list_matches, load_yamnet_model,
+    timestamp_to_seconds,
 )
 
 DEMO_DATABASE_PATH = DEMO_DIR / "clips_data.db"
@@ -44,13 +46,7 @@ def _renormalize_demo_clip_timestamps(
     matches = pd.read_csv(matches_csv_path)
     durations = matches.set_index("match_id")["audio_length_sec"].astype(float)
 
-    def to_seconds(timestamp: str) -> int:
-        return sum(
-            int(part) * factor
-            for part, factor in zip(timestamp.split(":"), (3600, 60, 1))
-        )
-
-    clips["_start_sec"] = clips["timestamp_formatted"].map(to_seconds).astype(float)
+    clips["_start_sec"] = clips["timestamp_formatted"].map(timestamp_to_seconds).astype(float)
     clips["_end_sec"] = clips["_start_sec"] + clips["length_sec"].astype(float)
     clips["_demo_start_sec"] = (clips["_start_sec"] - start_offset_sec).clip(lower=0)
     clips["_demo_end_sec"] = clips.apply(
@@ -60,9 +56,7 @@ def _renormalize_demo_clip_timestamps(
     )
     # Keep only the part of each labelled span that overlaps the trimmed media.
     clips = clips[clips["_demo_end_sec"] > clips["_demo_start_sec"]].copy()
-    clips["timestamp_formatted"] = clips["_demo_start_sec"].map(
-        lambda seconds: f"{int(seconds) // 3600:02d}:{int(seconds) % 3600 // 60:02d}:{int(seconds) % 60:02d}"
-    )
+    clips["timestamp_formatted"] = clips["_demo_start_sec"].map(format_timestamp)
     clips["length_sec"] = clips["_demo_end_sec"] - clips["_demo_start_sec"]
     clips.drop(columns=["_start_sec", "_end_sec", "_demo_start_sec", "_demo_end_sec"], inplace=True)
     clips.to_csv(clips_csv_path, index=False)

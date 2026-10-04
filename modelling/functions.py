@@ -20,7 +20,7 @@ from sklearn.model_selection import GroupKFold, ParameterSampler
 from xgboost import XGBClassifier
 
 from constants import (
-    BUDGET_BAND, CURVE_N_THRESHOLDS, DEMO_CANDIDATE_BUDGET,
+    BUDGET_BAND, CURVE_N_THRESHOLDS,
     FINAL_CURVE_N_THRESHOLDS, MODEL_N_JOBS, MODEL_PARAM_DISTRIBUTIONS,
     SCORE_INDICES, TEST_MATCH_IDS, YAMNET_STRIDE_SEC, YAMNET_WINDOW_SEC,
 )
@@ -74,94 +74,32 @@ def interval_overlap(start: float, end: float, labels: list[tuple[float, float]]
     return any(start < label_end and end > label_start for label_start, label_end in labels)
 
 
-def merge_intervals(intervals: list[tuple[float, float]], merge_gap: float) -> list[tuple[float, float]]:
-    merged = []
-    for start, end in sorted(intervals):
-        if merged and start <= merged[-1][1] + merge_gap:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-        else:
-            merged.append((start, end))
-    return merged
+def merge_interval_arrays(
+    starts: np.ndarray,
+    ends: np.ndarray,
+    merge_gap: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Merge interval arrays and return their starts and ends in time order."""
+    starts = np.asarray(starts, dtype=float)
+    ends = np.asarray(ends, dtype=float)
+    if starts.size != ends.size:
+        raise ValueError("Interval starts and ends must have the same length")
+    if not starts.size:
+        return starts, ends
 
-
-def format_timestamp(seconds: float) -> str:
-    """Format a time in seconds as HH:MM:SS."""
-    seconds = max(0, int(seconds))
-    hours, remainder = divmod(seconds, 3600)
-    minutes, secs = divmod(remainder, 60)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    order = np.argsort(starts)
+    starts, ends = starts[order], ends[order]
+    running_ends = np.maximum.accumulate(ends)
+    breaks = np.flatnonzero(starts[1:] > running_ends[:-1] + merge_gap) + 1
+    group_starts = np.concatenate(([0], breaks))
+    merged_starts = starts[group_starts]
+    merged_ends = np.maximum.reduceat(ends, group_starts)
+    return merged_starts, merged_ends
 
 
 def score_feature_matrix(model: XGBClassifier, feature_matrix: np.ndarray) -> np.ndarray:
     """Return positive-class probabilities for a model-ready feature matrix."""
     return model.predict_proba(np.asarray(feature_matrix, dtype=np.float32))[:, 1]
-
-
-def build_candidate_clips(
-    starts: np.ndarray,
-    probabilities: np.ndarray,
-    duration: float,
-    bundle: dict,
-    target_budget: float = DEMO_CANDIDATE_BUDGET,
-) -> tuple[pd.DataFrame, float, int]:
-    """Turn scored windows into padded, merged candidate clips."""
-    def make_clips(threshold: float) -> pd.DataFrame:
-        selected_starts = starts[probabilities >= threshold]
-        intervals = merge_intervals(
-            [(max(0, start - bundle["lookback"]),
-              min(duration, start + bundle["window_sec"] + bundle["postroll"]))
-             for start in selected_starts],
-            bundle["merge_gap"],
-        )
-        return pd.DataFrame(intervals, columns=["start_sec", "end_sec"])
-
-    breakpoints = np.unique(probabilities)
-    if len(breakpoints):
-        low, high = 0, len(breakpoints)
-        while low < high:
-            middle = (low + high) // 2
-            candidate = make_clips(float(breakpoints[middle]))
-            seconds = candidate["end_sec"].sub(candidate["start_sec"]).sum()
-            if (seconds / duration if duration else 0.0) <= target_budget:
-                high = middle
-            else:
-                low = middle + 1
-        choices = []
-        for index in {max(0, low - 1), min(low, len(breakpoints) - 1)}:
-            threshold = float(breakpoints[index])
-            candidate = make_clips(threshold)
-            seconds = candidate["end_sec"].sub(candidate["start_sec"]).sum()
-            budget = seconds / duration if duration else 0.0
-            choices.append((abs(budget - target_budget), threshold, candidate))
-        empty_threshold = float(np.nextafter(breakpoints[-1], np.inf))
-        choices.append((target_budget, empty_threshold, make_clips(empty_threshold)))
-        _, threshold, clips = min(choices, key=lambda item: (item[0], item[1]))
-    else:
-        threshold = float(bundle["threshold"])
-        clips = make_clips(threshold)
-
-    clips["length_sec"] = clips["end_sec"] - clips["start_sec"]
-    clips["start"] = clips["start_sec"].apply(format_timestamp)
-    clips["end"] = clips["end_sec"].apply(format_timestamp)
-    clips.attrs["threshold"] = threshold
-    clips.attrs["target_budget"] = target_budget
-    return clips, duration, len(starts)
-
-
-def _fully_contained(interval: tuple[float, float], candidates: list[tuple[float, float]]) -> bool:
-    """A label only counts as 'found' if some candidate window entirely
-    brackets it."""
-    start, end = interval
-    return any(candidate_start <= start and candidate_end >= end for candidate_start, candidate_end in candidates)
-
-
-def coverage_metrics(
-    labels: list[tuple[float, float]],
-    candidates: list[tuple[float, float]],
-) -> tuple[int, int, float]:
-    found = sum(_fully_contained((start, end), candidates) for start, end in labels)
-    candidate_seconds = sum(end - start for start, end in candidates)
-    return found, len(labels), candidate_seconds
 
 
 # --- Recall-vs-budget curve -----------------------------------------------------
@@ -220,11 +158,9 @@ def recall_budget_curve(
 
             interval_starts = np.maximum(0.0, selected_starts - lookback)
             interval_ends = selected_starts + WINDOW_SEC + postroll
-            breaks = np.flatnonzero(interval_starts[1:] > interval_ends[:-1] + merge_gap) + 1
-            group_starts = np.concatenate(([0], breaks))
-            group_ends = np.concatenate((breaks - 1, [len(selected_starts) - 1]))
-            merged_starts = interval_starts[group_starts]
-            merged_ends = interval_ends[group_ends]
+            merged_starts, merged_ends = merge_interval_arrays(
+                interval_starts, interval_ends, merge_gap
+            )
 
             total_seconds += np.sum(merged_ends - merged_starts)
             containing = np.searchsorted(merged_starts, label_starts, side="right") - 1

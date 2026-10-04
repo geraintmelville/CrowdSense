@@ -45,12 +45,7 @@ from constants import (
     CLIP_DATABASE_PATH, FEATURES_DIR, LABELS_PATH, LABEL_WINDOW_SEC,
     MIN_PEAK_SCORE, PEAK_LABELS, SCORE_INDICES, SEARCH_MARGIN_SEC,
 )
-
-
-def timestamp_to_seconds(timestamp_formatted: str) -> float:
-    """Convert an 'HH:MM:SS' clip timestamp (offset into the raw match) to seconds."""
-    hours, minutes, seconds = (int(part) for part in timestamp_formatted.split(":"))
-    return hours * 3600 + minutes * 60 + seconds
+from preprocessing.functions import timestamp_to_seconds
 
 
 def load_clips(db_path: Path) -> pd.DataFrame:

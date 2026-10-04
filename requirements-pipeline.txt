@@ -1,0 +1,3 @@
+# Full data preparation, feature extraction, model training/evaluation, and app.
+# Pipeline feature extraction and the app's Full demo share the YAMNet runtime.
+-r requirements.txt

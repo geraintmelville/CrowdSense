@@ -11,10 +11,10 @@ from constants.constants import (
     DEFAULT_DEMO_YOUTUBE_URL, DEMO_FEATURES_DIR, DEMO_RAW_AUDIO_DIR, MODEL_PATH,
 )
 from crowdsense.demo_functions import (
-    format_mmss, goal_intervals, score_match, score_precomputed_features,
+    format_mmss, format_timestamp, goal_intervals, score_match, score_precomputed_features,
     youtube_timestamp_url,
 )
-from modelling.functions import format_timestamp, load_model_artifact
+from modelling.functions import load_model_artifact
 
 
 @st.cache_resource
