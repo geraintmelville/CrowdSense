@@ -1,8 +1,8 @@
 # CrowdSense
 
-CrowdSense is an audio-based futsal highlight finder. It processes full-match recordings with YAMNet, a pretrained audio model, and trains an XGBoost classifier to identify likely goal moments. The app turns those detections into candidate time ranges for a person to review.
+CrowdSense is an audio-based futsal highlight detection model. It processes full-match audio recordings with YAMNet, a pretrained audio model, and trains an XGBoost classifier to identify likely goal moments. Due to memory constraints, the app showcases a demo which live processes a pre-extracted 25 minute audio file and produces candidate clips which can be reviewed in app through a YouTube stream.
 
-The workflow is: match footage and manually curated goal clips → audio and clip metadata → YAMNet features and refined labels → model tuning and training → candidate windows for review. The Streamlit app's **Deep Dive Docs** pages provide an interactive explanation of preprocessing, metrics, modelling, and held-out performance; the **Welcome** page contains a clickable pipeline map.
+The workflow is: match footage and manually curated goal clips → audio and clip metadata → YAMNet features and refined labels → model tuning and training → candidate windows for review. The Streamlit app's **Welcome** page contains a clickable pipeline map; the **Deep Dive Docs** pages provide a detailed explanation of preprocessing, metrics, modelling, and held-out performance.
 
 ## Requirements
 
@@ -36,23 +36,21 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The app's **Quick demo** scores the precomputed Parquet features in `demo/features/`. **Full demo** extracts YAMNet features from a WAV in `demo/raw/audio/` before scoring. Both modes need the trained model pair `data/modelling/final_model/model.ubj` and `data/modelling/final_model/model.json`. The JSON sidecar is part of the model bundle: it contains the threshold, feature schema, PCA projection, and candidate-window settings. If either file is absent, run the training pipeline below or provide an existing compatible model at that path.
+The app's demo extracts YAMNet features from a WAV in `demo/raw/audio/` before scoring. It uses the trained model pair `data/modelling/final_model/model.ubj` and `data/modelling/final_model/model.json`. The JSON sidecar is part of the model bundle: it contains the feature schema, PCA projection, and candidate-window settings. If either file is absent, run the training pipeline below or provide an existing compatible model at that path.
 
 The demo links candidates to the match on YouTube using `CROWDSENSE_DEMO_YOUTUBE_URL`. It defaults to the demonstration match configured in `constants/constants.py`; set the environment variable to use another video. Candidate timestamps are relative to the start of the selected WAV, so that audio and video need to be time-aligned.
 
 ## Training data
 
-Training needs full-match videos **and** a ZIP of the corresponding manually curated highlight clips for each match. Goal clips provide positive examples; other periods in the match become negative examples. The ZIPs should include the editor's goal clips, not only a spreadsheet of timestamps, because the pipeline reads each clip's timestamp and duration from its filename and media.
+Training needs full-match videos **and** a ZIP of the corresponding manually curated highlight clips for each match. Goal clips are processed to find a 3s window containing the crowd-spike, which provides a positive example and is saved to `data/processed/labels/labels.csv; other periods in the match become negative examples.
 
 Place input files here (raw media is ignored by Git):
 
 ```text
 data/raw/
 ├── video/   # one full match MP4 per match
-├── clips/   # one highlight ZIP per match
-└── audio/   # generated mono WAV files
+└── clips/   # one highlight ZIP per match
 ```
-
 ### File naming and clip contents
 
 - Match video names must follow `teams-YYYY-MM-DD.mp4`, for example `mens-a-v-baku-united-2026-04-19.mp4`.
