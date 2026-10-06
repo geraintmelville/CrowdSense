@@ -8,10 +8,10 @@ import pandas as pd
 import streamlit as st
 
 from constants.constants import (
-    DEFAULT_DEMO_YOUTUBE_URL, DEMO_FEATURES_DIR, DEMO_RAW_AUDIO_DIR, MODEL_PATH,
+    DEFAULT_DEMO_YOUTUBE_URL, DEMO_RAW_AUDIO_DIR, MODEL_PATH,
 )
 from crowdsense.demo_functions import (
-    format_mmss, format_timestamp, goal_intervals, score_match, score_precomputed_features,
+    format_mmss, format_timestamp, goal_intervals, score_match,
     youtube_timestamp_url,
 )
 from modelling.functions import load_model_artifact
@@ -91,47 +91,11 @@ def _render_results(result: dict, youtube_url: str) -> None:
         st.video(youtube_url, start_time=int(selected_clip["start_sec"]))
 
 
-def render_quick_demo(bundle: dict, youtube_url: str) -> None:
-    feature_files = sorted(path for path in DEMO_FEATURES_DIR.glob("*.parquet") if path.is_file())
-    if not feature_files:
-        st.info(
-            f"No pre-extracted feature files found in {DEMO_FEATURES_DIR}. "
-            "Prepare them with `python -m demo.prepare_demo` before using Quick demo."
-        )
-        return
-
-    feature_file = st.selectbox(
-        "Pre-extracted match features", feature_files, format_func=lambda path: path.stem
-    )
-    result_key = f"quick:{feature_file}"
-    if st.button("Score pre-extracted features", type="primary"):
-        try:
-            features = pd.read_parquet(feature_file)
-            if features.empty or "start_sec" not in features.columns:
-                raise ValueError("Precomputed feature file contains no valid windows")
-            duration = float(features["start_sec"].max() + bundle["window_sec"])
-            with st.spinner("Scoring cached features..."):
-                clips, duration, n_windows = score_precomputed_features(features, bundle, duration)
-        except (OSError, RuntimeError, ValueError) as error:
-            st.error(f"Quick demo failed: {error}")
-            return
-        st.session_state["demo_result"] = {
-            "result_key": result_key,
-            "clips": clips,
-            "duration": duration,
-            "n_windows": n_windows,
-        }
-
-    result = st.session_state.get("demo_result")
-    if result and result.get("result_key") == result_key:
-        _render_results(result, youtube_url)
-
-
-def render_full_demo(bundle: dict, youtube_url: str) -> None:
+def render_audio_demo(bundle: dict, youtube_url: str) -> None:
     audio_files = sorted(path for path in DEMO_RAW_AUDIO_DIR.glob("*.wav") if path.is_file())
     if not audio_files:
         st.info(
-            f"Add the full-match WAV to {DEMO_RAW_AUDIO_DIR} to run the full demo. "
+            f"Add the match WAV to {DEMO_RAW_AUDIO_DIR} to run the demo. "
             "Prepare it from a match video with `python -m demo.prepare_demo`."
         )
         return
@@ -145,18 +109,18 @@ def render_full_demo(bundle: dict, youtube_url: str) -> None:
                     audio_path, bundle, yamnet_model=load_demo_yamnet_model()
                 )
         except (OSError, RuntimeError, ValueError) as error:
-            st.error(f"Full demo failed: {error}")
+            st.error(f"Demo failed: {error}")
             return
 
         st.session_state["demo_result"] = {
-            "result_key": f"full:{audio_path}",
+            "result_key": f"demo:{audio_path}",
             "clips": clips,
             "duration": duration,
             "n_windows": n_windows,
         }
 
     result = st.session_state.get("demo_result")
-    result_key = f"full:{audio_path}"
+    result_key = f"demo:{audio_path}"
     if result and result.get("result_key") == result_key:
         _render_results(result, youtube_url)
 
@@ -168,19 +132,14 @@ def render_demo(bundle: dict) -> None:
         CrowdSense live demo predicts on a ~25min audio file from a match not seen in training or testing,
         and lets users review the resulting candidate clips via YouTube.
 
-        - **Full demo** loads YAMNet and extracts features from the WAV file, loads the saved 
-         PCA components to compress them. It then loads the pre-trained `XGBoost` model from `model.ubj`
+        The demo loads YAMNet and extracts features from the WAV file, loads the saved
+        PCA components to compress them. It then loads the pre-trained `XGBoost` model from `model.ubj`
         and `model.json`, scores the features and constructs candidate clips, choosing a threshold
         that corresponds with a budget as close to 33% as possible, see Modelling `eval_model.py` for justification of this.
-        - **Quick demo** skips YAMNet feature extraction and scores cached pre-extracted features, as above.
         """
     )
-    mode = st.radio("Demo mode", ["Quick demo", "Full demo"], horizontal=True)
     youtube_url = os.environ.get("CROWDSENSE_DEMO_YOUTUBE_URL", DEFAULT_DEMO_YOUTUBE_URL).strip()
-    if mode == "Quick demo":
-        render_quick_demo(bundle, youtube_url)
-    else:
-        render_full_demo(bundle, youtube_url)
+    render_audio_demo(bundle, youtube_url)
 
 
 def parse_args() -> argparse.Namespace:

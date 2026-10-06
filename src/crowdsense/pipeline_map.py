@@ -192,19 +192,11 @@ NODES = [
     # -------------------------------------------------------------------- Demo
     dict(
         id="demo_audio", kind="data", col=0, row=8, port=150,
-        title="Demo audio", sub="Match WAV (full demo)",
+        title="Demo audio", sub="Match WAV",
         summary="The audio for the demo match, extracted from the full video by the demo prep script. "
-                "The Full demo runs YAMNet over this live.",
+                "The demo runs YAMNet over this live.",
         where=["demo/raw/audio/", "python -m demo.prepare_demo"],
         notes=["Raw media is git-ignored."],
-    ),
-    dict(
-        id="demo_features", kind="data", col=1, row=8,
-        title="Demo features", sub="Cached parquet (quick)",
-        summary="Model-compatible feature files for the demo match, generated ahead of time. "
-                "The Quick demo scores these directly and skips YAMNet.",
-        where=["demo/features/"],
-        notes=["These are tracked in git so the hosted app can start quickly."],
     ),
     dict(
         id="bundle", kind="data", col=2, row=8,
@@ -217,7 +209,7 @@ NODES = [
         id="streamlit_demo", kind="script", col=1, row=9,
         title="Streamlit demo", sub="YAMNet + XGBoost",
         summary="Scores every audio frame with the model bundle, then turns the scores into candidate "
-                "windows. Full demo extracts features from the audio first; Quick demo uses the cached features.",
+                "windows. The demo extracts features from the audio first.",
         where=["src/crowdsense/views/dashboard.py", "src/crowdsense/demo_functions.py"],
         notes=["The threshold is searched per match so the candidate footage lands near the 30% budget. "
                "The threshold stored in the bundle is only a fallback."],
@@ -255,7 +247,6 @@ EDGES = [
     ("save_final_model", "bundle"),
     ("save_final_model", "eval_model"),
     ("demo_audio", "streamlit_demo", dict(into=48)),
-    ("demo_features", "streamlit_demo"),
     ("bundle", "streamlit_demo", dict(into=128)),
     ("streamlit_demo", "candidates"),
     ("candidates", "reviewer"),
