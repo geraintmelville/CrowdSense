@@ -1,6 +1,6 @@
 # CrowdSense
 
-CrowdSense is an audio-based futsal highlight detection model, showcased in an app https://crowd-sense.streamlit.app that provides a demo and full report. The pipeline ingests Veo match footage with human-curated highlight clip, it processes the audio with YAMNet, a pretrained audio embedding model, to extract features and labels them using the highlight clips, then trains an XGBoost classifier to identify likely goal moments.
+CrowdSense is an audio-based futsal highlight detection model, showcased in an app https://crowd-sense.streamlit.app that provides a demo and full report. The pipeline ingests Veo match footage with human-curated highlight clips, it processes the audio with YAMNet, a pretrained audio embedding model, to extract features and labels them using the highlight clips, then trains an XGBoost classifier to identify likely goal moments.
 
 On the eight held-out test matches, the selected operating point covered **91% of editor-labelled goal clips** while flagging **31% of match footage** for review. The partial area-under-curve score across the 25–40% footage-budget range was **0.92**.
 
