@@ -1,5 +1,11 @@
 # CrowdSense
 
+CrowdSense is an audio-based futsal highlight detector. It analyses match audio and flags short candidate clips that may contain goals, leaving a human editor to review the footage.
+
+The model uses YAMNet audio features and an XGBoost classifier. On the eight held-out test matches, the selected operating point covered **91% of editor-labelled goal clips** while flagging **31% of match footage** for review. The partial area-under-curve score across the 25–40% footage-budget range was **0.92**. See [REPORT.md](REPORT.md) for the method, metric definitions, pipeline, and limitations.
+
+# CrowdSense
+
 CrowdSense is an audio-based futsal highlight detection model. It processes full-match audio recordings with YAMNet, a pretrained audio model, and trains an XGBoost classifier to identify likely goal moments. Due to memory constraints, the app showcases a demo which live processes a pre-extracted 25 minute audio file and produces candidate clips which can be reviewed in app through a YouTube stream.
 
 The workflow is: match footage and manually curated goal clips → audio and clip metadata → YAMNet features and refined labels → model tuning and training → candidate windows for review. The Streamlit app's **Welcome** page contains a clickable pipeline map; the **Deep Dive Docs** pages provide a detailed explanation of preprocessing, metrics, modelling, and held-out performance.
@@ -40,7 +46,9 @@ The app's demo extracts YAMNet features from a WAV in `demo/raw/audio/` before s
 
 The demo links candidates to the match on YouTube using `CROWDSENSE_DEMO_YOUTUBE_URL`. It defaults to the demonstration match configured in `constants/constants.py`; set the environment variable to use another video. Candidate timestamps are relative to the start of the selected WAV, so that audio and video need to be time-aligned.
 
-## Training data
+## Build the model locally
+
+## Raw Data
 
 Training needs full-match videos **and** a ZIP of the corresponding manually curated highlight clips for each match. Goal clips are processed to find a 3s window containing the crowd-spike, which provides a positive example and is saved to `data/processed/labels/labels.csv; other periods in the match become negative examples.
 
@@ -60,7 +68,7 @@ data/raw/
 
 The fixed held-out test set is `TEST_MATCH_IDS` in `constants/constants.py` (currently match IDs 6, 22, 19, 13, 30, 26, 32, and 25). The IDs are database IDs, not filenames. This repository's split was selected for its dataset; when replacing or rebuilding the dataset, verify the IDs refer to the intended eight most recent matches and update the constant consistently before feature extraction, tuning, training, and evaluation. The pipeline fails if any configured test ID is missing.
 
-## Run the training pipeline
+### Run the training pipeline
 
 Install the full pipeline dependencies in the activated environment:
 
@@ -129,12 +137,11 @@ Loads the best hyperparameters and candidate-window settings from the search res
 
 Loads the saved bundle and scores only the eight held-out matches. It measures goal recall using the original editor clip bounds and computes the candidate footage budget relative to raw audio duration. The script reports recall at several budgets and the partial recall-budget AUC, marks the training-selected operating threshold, and writes the test curve plot. Test results are for final assessment; do not use them to retune model settings.
 
-### Supporting modules and app
+### Supporting modules
 
 - `preprocessing/functions.py` contains shared filename parsing, clip probing, audio/YAMNet extraction, Parquet construction, and PCA helpers.
 - `modelling/functions.py` contains feature and label loading, target construction, candidate merging, grouped cross-validation, recall-budget metrics, model persistence, and threshold selection.
 - `constants/constants.py` defines project paths, YAMNet and label settings, the fixed test match IDs, tuning ranges, and budget defaults.
-- `src/crowdsense/views/dashboard.py` provides Quick and Full demo scoring. `src/crowdsense/demo_functions.py` runs inference, selects a threshold for approximately 30% candidate footage, and merges detections into candidate ranges. `app.py` registers the Streamlit pages.
 
 ## Prepare demo data (optional)
 
