@@ -1,14 +1,12 @@
 # CrowdSense
 
-CrowdSense is an audio-based futsal highlight detector. It analyses match audio and flags short candidate clips that may contain goals, leaving a human editor to review the footage.
+CrowdSense is an audio-based futsal highlight detection model, showcased in an app https://crowd-sense.streamlit.app that provides a demo and full report. The pipeline ingests Veo match footage with human-curated highlight clip, it processes the audio with YAMNet, a pretrained audio embedding model, to extract features and labels them using the highlight clips, then trains an XGBoost classifier to identify likely goal moments.
 
-The model uses YAMNet audio features and an XGBoost classifier. On the eight held-out test matches, the selected operating point covered **91% of editor-labelled goal clips** while flagging **31% of match footage** for review. The partial area-under-curve score across the 25–40% footage-budget range was **0.92**. See [REPORT.md](REPORT.md) for the method, metric definitions, pipeline, and limitations.
+On the eight held-out test matches, the selected operating point covered **91% of editor-labelled goal clips** while flagging **31% of match footage** for review. The partial area-under-curve score across the 25–40% footage-budget range was **0.92**.
 
-# CrowdSense
+The workflow is: match footage and manually curated goal clips → audio and clip metadata → YAMNet features and refined labels → model tuning and training → model evaluation → streamlit app with demo and report. 
 
-CrowdSense is an audio-based futsal highlight detection model. It processes full-match audio recordings with YAMNet, a pretrained audio model, and trains an XGBoost classifier to identify likely goal moments. Due to memory constraints, the app showcases a demo which live processes a pre-extracted 25 minute audio file and produces candidate clips which can be reviewed in app through a YouTube stream.
-
-The workflow is: match footage and manually curated goal clips → audio and clip metadata → YAMNet features and refined labels → model tuning and training → candidate windows for review. The Streamlit app's **Welcome** page contains a clickable pipeline map; the **Deep Dive Docs** pages provide a detailed explanation of preprocessing, metrics, modelling, and held-out performance.
+The Streamlit app's **Welcome** page contains motivation and a clickable pipeline map; The **Demo** live processes a pre-extracted 25 minute audio file and produces candidate clips which can be reviewed in app through a YouTube stream; the **Deep Dive Docs** pages provide a detailed explanation of preprocessing, metrics, modelling, and held-out performance. The same information is available in (REPORT.md)[REPORT.md].
 
 ## Requirements
 
